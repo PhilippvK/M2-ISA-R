@@ -138,7 +138,7 @@ def generate_fields(core_default_width, instr_def: arch.Instruction):
 			fields_code += f'struct {{etiss_int{core_default_width} x:{field_descr.size};}} {field_name}_ext;\n'
 			fields_code += f'{field_name} = {field_name}_ext.x = {field_name};'
 
-	asm_printer_code = f'ss << "{instr_def.name.lower()}" << " # " << ba << (" [' + ' | '.join(reversed(asm_printer_code)) + ']");'
+	asm_printer_code = f'ss << "{instr_def.mnemonic.lower()}" << " # " << ba << (" [' + ' | '.join(reversed(asm_printer_code)) + ']");'
 
 	return (fields_code, asm_printer_code, seen_fields, enc_idx)
 
