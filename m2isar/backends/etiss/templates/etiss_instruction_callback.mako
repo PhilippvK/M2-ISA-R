@@ -23,8 +23,15 @@ ${part}
 		cp.getRegisterDependencies().add(reg_name[${reg}], ${core_default_width});
 		% endfor
 		% for reg in sorted(reg_affected):
+		cp.code() += "printf(\"x%d=%x \", ";
+		cp.code() += std::to_string(${reg});
+		cp.code() += ", ";
+		cp.code() += "*((RV32IMACFD*)cpu)->X[";
+		cp.code() += std::to_string(${reg});
+		cp.code() += "]);\n";
 		cp.getAffectedRegisters().add(reg_name[${reg}], ${core_default_width});
 		% endfor
+		cp.code() += "printf(\"\\n\");\n";
 		cp.getAffectedRegisters().add("instructionPointer", 32);
 		% endif
 	}
