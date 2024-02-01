@@ -51,6 +51,9 @@ def int_literal(self: behav.IntLiteral, context):
 def scalar_definition(self: behav.ScalarDefinition, context):
 	return True
 
+def break_(self: behav.Break, context):
+	return True
+
 def assignment(self: behav.Assignment, context):
 	target = self.target.generate(context)
 	expr = self.expr.generate(context)
@@ -59,7 +62,7 @@ def assignment(self: behav.Assignment, context):
 
 def conditional(self: behav.Conditional, context):
 	conds = [x.generate(context) for x in self.conds]
-	stmts = [all(y.generate(context) for y in x) for x in self.stmts]
+	stmts = [x.generate(context) for x in self.stmts]
 
 	conds.extend(stmts)
 
@@ -99,7 +102,8 @@ def named_reference(self: behav.NamedReference, context):
 		arch.BitFieldDescr: True,
 		arch.Constant: True,
 		arch.FnParam: True,
-		arch.Scalar: True
+		arch.Scalar: True,
+		arch.Intrinsic: False
 	}
 
 	return static_map.get(type(self.reference), False)

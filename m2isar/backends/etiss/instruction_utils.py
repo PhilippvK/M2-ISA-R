@@ -8,7 +8,7 @@
 
 """Utility classes and functions for instruction generation."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from itertools import chain
 from string import Template
 
@@ -61,6 +61,10 @@ class CodeString:
 		return actual_size(self.size)
 
 	@property
+	def needs_fn_call(self):
+		return len(self.function_calls) > 0
+
+	@property
 	def is_mem_access(self):
 		return len(self.mem_ids) > 0
 
@@ -97,6 +101,28 @@ class FnID:
 	fn_id: int
 	args: CodeString
 
+@dataclass
+class CodePartsContainer:
+	pre_initial_debug_returning: str = None
+	initial_required: str = None
+	optional_middle: str = None
+	appended_required: str = None
+	appended_optional: str = None
+	appended_returning_required: str = None
+
+	def generate(self):
+		return {name.replace("_", "").upper(): part for name, part in asdict(self).items() if part is not None}
+
+	def format(self, mapping={}, **kwargs):
+		for name in asdict(self):
+			part = getattr(self, name)
+			if not part:
+				continue
+
+			formatted = Template(part).safe_substitute(mapping, **kwargs)
+			setattr(self, name, formatted)
+
+
 class TransformerContext:
 	"""Track miscellaneous information throughout the code generation process. Also
 	provides helper functions for staticness conversion etc.
@@ -104,7 +130,7 @@ class TransformerContext:
 
 	def __init__(self, constants: "dict[str, arch.Constant]", memories: "dict[str, arch.Memory]", memory_aliases: "dict[str, arch.Memory]",
 			fields: "dict[str, arch.BitFieldDescr]", attributes: "list[arch.InstrAttribute]", functions: "dict[str, arch.Function]",
-			instr_size: int, native_size: int, arch_name: str, static_scalars: bool, ignore_static=False):
+			instr_size: int, native_size: int, arch_name: str, static_scalars: bool, intrinsics, ignore_static=False):
 
 		self.constants = constants
 		self.memories = memories
@@ -115,6 +141,7 @@ class TransformerContext:
 		self.instr_size = instr_size
 		self.native_size = native_size
 		self.arch_name = arch_name
+		self.intrinsics = intrinsics
 		self.static_scalars = static_scalars
 
 		self.ignore_static = ignore_static
@@ -133,9 +160,9 @@ class TransformerContext:
 		self.mem_raise_fn: arch.Function = None
 
 		for fn_name, fn_def in self.functions.items():
-			if arch.FunctionAttribute.ETISS_EXC_ENTRY in fn_def.attributes:
+			if arch.FunctionAttribute.ETISS_TRAP_ENTRY_FN in fn_def.attributes:
 				self.raise_fn = fn_def
-			if arch.FunctionAttribute.ETISS_MEM_EXC_ENTRY in fn_def.attributes:
+			if arch.FunctionAttribute.ETISS_TRAP_TRANSLATE_FN in fn_def.attributes:
 				self.mem_raise_fn = fn_def
 
 		self.generates_exception = False
@@ -155,7 +182,7 @@ class TransformerContext:
 		if self.ignore_static:
 			return val
 
-		return Template(f'" + std::to_string({val}) + "{sign[signed]}').safe_substitute(**replacements.rename_static)
+		return Template(f'" + std::to_string({val}) + "{sign[signed]}LL').safe_substitute(**replacements.rename_static)
 
 	def wrap_codestring(self, val, static=False):
 		"""Wrap an entire static line."""
@@ -163,7 +190,7 @@ class TransformerContext:
 		if self.ignore_static or static:
 			return val
 
-		return f'partInit.code() += "{val}\\n";'
+		return f'cp.code() += "{val}\\n";'
 
 	def get_constant_or_val(self, name_or_val):
 		"""Convenience accessor for constant values."""
