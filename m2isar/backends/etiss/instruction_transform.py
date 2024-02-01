@@ -13,7 +13,7 @@ from itertools import chain
 from string import Template
 
 from ... import M2NameError, M2SyntaxError, M2ValueError, flatten
-from ...metamodel import arch, behav
+from ...metamodel import arch, behav, intrinsics
 from . import replacements
 from .instruction_utils import (FN_VAL_REPL, MEM_VAL_REPL, CodePartsContainer,
                                 CodeString, FnID, MemID, StaticType,
@@ -35,7 +35,7 @@ def operation(self: behav.Operation, context: TransformerContext):
 		c = stmt.generate(context)
 
 		if isinstance(c, list):
-			args.extend(c)
+			args.extend(flatten(c))
 		else:
 			args.append(c)
 
@@ -43,14 +43,13 @@ def operation(self: behav.Operation, context: TransformerContext):
 		if arg.is_mem_access:
 			raise_fn_call = behav.Conditional(
 				[behav.CodeLiteral('cpu->exception')],
-				[[behav.ProcedureCall(
+				[behav.ProcedureCall(
 					context.mem_raise_fn,
 					[behav.CodeLiteral("cpu->exception")]
-				)]]
+				)]
 			).generate(context)
 
-			raise_fn_str = [context.wrap_codestring(c.code) for c in raise_fn_call]
-
+			raise_fn_str = [context.wrap_codestring(c.code, c.static) for c in raise_fn_call]
 
 		for f_id in arg.function_calls:
 			code_lines.append(context.wrap_codestring(f'{data_type_map[f_id.fn_call.data_type]}{f_id.fn_call.actual_size} {FN_VAL_REPL}{f_id.fn_id};', arg.static))
@@ -95,7 +94,7 @@ def operation(self: behav.Operation, context: TransformerContext):
 			return_conditions.append("cpu->exception")
 
 		if arch.InstrAttribute.NO_CONT in context.attributes and arch.InstrAttribute.COND in context.attributes:
-			return_conditions.append(f'cpu->nextPc != " + std::to_string(ic.current_address_ + {int(context.instr_size / 8)}) + "')
+			return_conditions.append(f'cpu->nextPc != " + std::to_string(ic.current_address_ + {int(context.instr_size / 8)}) + "ULL')
 
 		elif arch.InstrAttribute.NO_CONT in context.attributes:
 			return_conditions.clear()
@@ -109,11 +108,26 @@ def operation(self: behav.Operation, context: TransformerContext):
 			container.appended_returning_required = f'cp.code() += "{cond_str}return cpu->exception;\\n";'
 
 	elif arch.FunctionAttribute.ETISS_TRAP_ENTRY_FN in context.attributes:
-		container.initial_required = "cpu->return_pending = 1;\n" + container.initial_required
+		container.initial_required = "cpu->return_pending = 1;\ncpu->exception = 0;\n" + container.initial_required
 
 	return container
 
+def block(self: behav.Block, context: TransformerContext):
+	stmts = [stmt.generate(context) for stmt in self.statements]
+
+	pre = [CodeString("{ // block", StaticType.READ, None, None)]
+	post = [CodeString("} // block", StaticType.READ, None, None)]
+
+	if not context.ignore_static:
+		pre.append(CodeString("{ // block", StaticType.NONE, None, None))
+		post.insert(0, CodeString("} // block", StaticType.NONE, None, None))
+
+	return pre + stmts + post
+
 def return_(self: behav.Return, context: TransformerContext):
+	if context.instr_size != 0:
+		raise M2SyntaxError('Return statements are not allowed in instruction behavior!')
+
 	if self.expr is not None:
 		c = self.expr.generate(context)
 		c.code = f'return {c.code};'
@@ -121,6 +135,9 @@ def return_(self: behav.Return, context: TransformerContext):
 		c = CodeString("return;", StaticType.RW, None, None)
 
 	return c
+
+def break_(self: behav.Break, context: TransformerContext):
+	return CodeString("break;", StaticType.RW, None, None)
 
 def scalar_definition(self: behav.ScalarDefinition, context: TransformerContext):
 	"""Generate a scalar definition. Calculates the actual required data width and generates
@@ -187,15 +204,20 @@ def procedure_call(self: behav.ProcedureCall, context: TransformerContext):
 
 			if fn.size is not None:
 				exc_code = "cpu->exception = "
-			else:
-				exc_code = "cpu->exception = 0; "
 
 		c = CodeString(f'{exc_code}{fn.name}({arg_str});', static, None, None)
 		c.mem_ids = mem_ids
 		if fn.throws and not context.ignore_static:
 			c.check_trap = True
-			c2 = CodeString('goto instr_exit_" + std::to_string(ic.current_address_) + ";', static, None, None)
-			return [c, c2]
+
+			cond = "if (cpu->return_pending) " if fn.throws == arch.FunctionThrows.MAYBE else ""
+			c2 = CodeString(cond + 'goto instr_exit_" + std::to_string(ic.current_address_) + ";', static, None, None)
+
+			pre = [CodeString("{ // procedure", StaticType.READ, None, None), CodeString("{ // procedure", StaticType.NONE, None, None)]
+			post = [CodeString("} // procedure", StaticType.NONE, None, None), CodeString("} // procedure", StaticType.READ, None, None)]
+
+			return pre + [c, c2] + post
+
 
 		return c
 
@@ -263,16 +285,24 @@ def conditional(self: behav.Conditional, context: TransformerContext):
 	conds: "list[CodeString]" = [x.generate(context) for x in self.conds]
 	stmts: "list[list[CodeString]]" = [] #= [[y.generate(context) for y in x] for x in self.stmts]
 
-	for stmt_block in self.stmts:
-		block_statements = []
-		for stmt in stmt_block:
-			if isinstance(stmt, list):
-				for stmt2 in stmt:
-					block_statements.append(stmt2.generate(context))
-			else:
-				block_statements.append(stmt.generate(context))
+	for stmt in self.stmts:
+		ret = stmt.generate(context)
 
-		stmts.append(block_statements)
+		if isinstance(ret, list):
+			stmts.append(ret)
+		else:
+			stmts.append([ret])
+
+	#for stmt_block in self.stmts:
+	#	block_statements = []
+	#	for stmt in stmt_block:
+	#		if isinstance(stmt, list):
+	#			for stmt2 in stmt:
+	#				block_statements.append(stmt2.generate(context))
+	#		else:
+	#			block_statements.append(stmt.generate(context))
+
+	#	stmts.append(block_statements)
 
 	# check if all conditions are static
 	static = all(x.static for x in conds)
@@ -291,7 +321,7 @@ def conditional(self: behav.Conditional, context: TransformerContext):
 
 	# generate initial if
 	#c = conds[0]
-	conds[0].code = f'if ({conds[0].code}) {{'
+	conds[0].code = f'if ({conds[0].code}) {{ // conditional'
 	outputs.append(conds[0])
 	if not static:
 		context.dependent_regs.update(conds[0].regs_affected)
@@ -300,24 +330,24 @@ def conditional(self: behav.Conditional, context: TransformerContext):
 	outputs.extend(flatten(stmts[0]))
 
 	# generate closing brace
-	outputs.append(CodeString("}", static, None, None))
+	outputs.append(CodeString("} // conditional", static, None, None))
 
 	for elif_cond, elif_stmts in zip(conds[1:], stmts[1:]):
-		elif_cond.code = f' else if ({elif_cond.code}) {{'
+		elif_cond.code = f' else if ({elif_cond.code}) {{ // conditional'
 		outputs.append(elif_cond)
 		if not static:
 			context.dependent_regs.update(elif_cond.regs_affected)
 
 		outputs.extend(flatten(elif_stmts))
 
-		outputs.append(CodeString("}", static, None, None))
+		outputs.append(CodeString("} // conditional", static, None, None))
 
 	if len(conds) < len(stmts):
-		outputs.append(CodeString("else {", static, None, None))
+		outputs.append(CodeString("else { // conditional", static, None, None))
 
 		outputs.extend(flatten(stmts[-1]))
 
-		outputs.append(CodeString("}", static, None, None))
+		outputs.append(CodeString("} // conditional", static, None, None))
 
 	return outputs
 
@@ -341,13 +371,13 @@ def loop(self: behav.Loop, context: TransformerContext):
 	outputs: "list[CodeString]" = []
 
 	if self.post_test:
-		start_c = CodeString("do {", cond.static, None, None)
+		start_c = CodeString("do", cond.static, None, None)
 		end_c = cond
-		end_c.code = f'}} while ({end_c.code})'
+		end_c.code = f'while ({end_c.code})'
 	else:
 		start_c = cond
-		start_c.code = f'while ({start_c.code}) {{'
-		end_c = CodeString("}", cond.static, None, None)
+		start_c.code = f'while ({start_c.code})'
+		end_c = CodeString("", cond.static, None, None)
 
 	outputs.append(start_c)
 
@@ -581,7 +611,19 @@ def named_reference(self: behav.NamedReference, context: TransformerContext):
 		size = referred_var.size
 		static = StaticType.RW
 
+	elif isinstance(referred_var, arch.Intrinsic):
+		if context.ignore_static:
+			raise TypeError("intrinsic not allowed in function")
+
+		signed = referred_var.data_type == arch.DataType.S
+		size = referred_var.size
+		static = StaticType.READ
+
+		if referred_var == context.intrinsics["__encoding_size"]:
+			name = str(context.instr_size // 8)
+
 	else:
+		raise TypeError("wrong type")
 		# should not happen
 		signed = False
 
@@ -666,7 +708,7 @@ def type_conv(self: behav.TypeConv, context: TransformerContext):
 		target_size = self.actual_size
 
 		if isinstance(self.size, int):
-			code_str = f'((etiss_int{target_size})(({expr.code}) << ({target_size - expr.size})) >> ({target_size - expr.size}))'
+			code_str = f'((etiss_int{target_size})(((etiss_int{target_size}){expr.code}) << ({target_size - expr.size})) >> ({target_size - expr.size}))'
 		else:
 			code_str = f'((etiss_int{target_size})(({expr.code}) << ({target_size} - {expr.size})) >> ({target_size} - {expr.size}))'
 
@@ -696,10 +738,12 @@ def int_literal(self: behav.IntLiteral, context: TransformerContext):
 
 	# add c postfix for large numbers
 	postfix = "U" if not sign else ""
-	if size > 32:
-		postfix += "L"
-	if size > 64:
-		postfix += "L"
+	postfix += "LL"
+	#postfix = "ULL"
+	#if size > 32:
+	#	postfix += "L"
+	#if size > 64:
+	#	postfix += "L"
 
 	ret = CodeString(minus + str(lit) + postfix, True, size, sign)
 	ret.is_literal = True
@@ -715,10 +759,12 @@ def number_literal(self: behav.NumberLiteral, context: TransformerContext):
 	twocomp_lit = (lit + (1 << 64)) % (1 << 64)
 
 	postfix = "U" if not sign else ""
-	if size > 32:
-		postfix += "L"
-	if size > 64:
-		postfix += "L"
+	postfix += "LL"
+	#postfix = "ULL"
+	#if size > 32:
+	#	postfix += "L"
+	#if size > 64:
+	#	postfix += "L"
 
 	return CodeString(str(twocomp_lit) + postfix, True, size, sign)
 

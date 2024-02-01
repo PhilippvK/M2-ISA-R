@@ -56,6 +56,32 @@ def binary_operation(self: behav.BinaryOperation, context):
 		res: int = int(eval(f"{self.left.value}{self.op.value}{self.right.value}"))
 		return behav.IntLiteral(res, max(self.left.bit_size, self.right.bit_size, res.bit_length()))
 
+	if self.op.value == "&&":
+		if isinstance(self.left, behav.IntLiteral):
+			if self.left.value:
+				return self.right
+			else:
+				return self.left
+
+		if isinstance(self.right, behav.IntLiteral):
+			if self.right.value:
+				return self.left
+			else:
+				return self.right
+
+	if self.op.value == "||":
+		if isinstance(self.left, behav.IntLiteral):
+			if self.left.value:
+				return self.left
+			else:
+				return self.right
+
+		if isinstance(self.right, behav.IntLiteral):
+			if self.right.value:
+				return self.right
+			else:
+				return self.left
+
 	return self
 
 def slice_operation(self: behav.SliceOperation, context):
@@ -80,6 +106,9 @@ def int_literal(self: behav.IntLiteral, context):
 def scalar_definition(self: behav.ScalarDefinition, context):
 	return self
 
+def break_(self: behav.Break, context):
+	return self
+
 def assignment(self: behav.Assignment, context):
 	self.target = self.target.generate(context)
 	self.expr = self.expr.generate(context)
@@ -95,7 +124,7 @@ def assignment(self: behav.Assignment, context):
 
 def conditional(self: behav.Conditional, context):
 	self.conds = [x.generate(context) for x in self.conds]
-	self.stmts = [[y.generate(context) for y in x] for x in self.stmts]
+	self.stmts = [x.generate(context) for x in self.stmts]
 
 	eval_false = True
 

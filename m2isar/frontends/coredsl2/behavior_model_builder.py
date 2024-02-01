@@ -9,7 +9,7 @@
 import logging
 
 from ... import M2NameError, M2SyntaxError, M2TypeError, flatten
-from ...metamodel import arch, behav
+from ...metamodel import arch, behav, intrinsics
 from ...metamodel.utils import StaticType
 from .parser_gen import CoreDSL2Parser, CoreDSL2Visitor
 from .utils import BOOLCONST, RADIX, SHORTHANDS, SIGNEDNESS
@@ -93,7 +93,7 @@ class BehaviorModelBuilder(CoreDSL2Visitor):
 
 		items = [self.visit(obj) for obj in ctx.items]
 		items = list(flatten(items))
-		return items
+		return behav.Block(items)
 
 	def visitDeclaration(self, ctx: CoreDSL2Parser.DeclarationContext):
 		"""Generate a declaration statement. Can be multiple declarations of
@@ -124,15 +124,16 @@ class BehaviorModelBuilder(CoreDSL2Visitor):
 			# initialization to the scalar
 			if decl.init:
 				init = self.visit(decl.init)
-
-				a = behav.Assignment(sd, init)
-				ret_decls.append(a)
-
-			# if not only generate the declaration
 			else:
-				ret_decls.append(sd)
+				init = behav.IntLiteral(0)
+
+			a = behav.Assignment(sd, init)
+			ret_decls.append(a)
 
 		return ret_decls
+
+	def visitBreak_statement(self, ctx: CoreDSL2Parser.Break_statementContext):
+		return behav.Break()
 
 	def visitReturn_statement(self, ctx: CoreDSL2Parser.Return_statementContext):
 		"""Generate a return statement."""
@@ -203,7 +204,10 @@ class BehaviorModelBuilder(CoreDSL2Visitor):
 		conds = [self.visit(x) for x in ctx.cond]
 		stmts = [self.visit(x) for x in ctx.stmt]
 
-		stmts = [[x] if not isinstance(x, list) else x for x in stmts]
+		stmts = [x if not isinstance(x, list) else None for x in stmts]
+
+		if None in stmts:
+			raise Exception("meep")
 
 		return behav.Conditional(conds, stmts)
 
@@ -300,7 +304,8 @@ class BehaviorModelBuilder(CoreDSL2Visitor):
 			self._fields.get(name) or \
 			self._constants.get(name) or \
 			self._memory_aliases.get(name) or \
-			self._memories.get(name)
+			self._memories.get(name) or \
+			intrinsics.get(name)
 
 		if var is None:
 			raise M2NameError(f"Named reference \"{name}\" does not exist!")

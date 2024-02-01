@@ -57,6 +57,9 @@ def scalar_definition(self: behav.ScalarDefinition, context: ScalarStaticnessCon
 	self.scalar.static = StaticType.RW
 	return StaticType.RW
 
+def break_(self: behav.Break, context):
+	return StaticType.READ
+
 def assignment(self: behav.Assignment, context: ScalarStaticnessContext):
 	self.target.generate(context)
 
@@ -78,7 +81,7 @@ def assignment(self: behav.Assignment, context: ScalarStaticnessContext):
 def conditional(self: behav.Conditional, context: ScalarStaticnessContext):
 	conds = [x.generate(context) for x in self.conds]
 	stmt_context = dataclasses.replace(context, context_is_static=min(conds))
-	_ = [[y.generate(stmt_context) for y in x] for x in self.stmts]
+	_ = [x.generate(stmt_context) for x in self.stmts]
 
 def loop(self: behav.Loop, context: ScalarStaticnessContext):
 	cond = self.cond.generate(context)

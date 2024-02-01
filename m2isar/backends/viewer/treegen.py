@@ -23,6 +23,14 @@ def operation(self: behav.Operation, context: "TreeGenContext"):
 
 	context.pop()
 
+def block(self: behav.Block, context: "TreeGenContext"):
+	context.push(context.tree.insert(context.parent, tk.END, text="Block"))
+
+	for stmt in self.statements:
+		stmt.generate(context)
+
+	context.pop()
+
 def binary_operation(self: behav.BinaryOperation, context: "TreeGenContext"):
 	context.push(context.tree.insert(context.parent, tk.END, text="Binary Operation"))
 
@@ -77,6 +85,9 @@ def int_literal(self: behav.IntLiteral, context: "TreeGenContext"):
 def scalar_definition(self: behav.ScalarDefinition, context: "TreeGenContext"):
 	context.tree.insert(context.parent, tk.END, text="Scalar Definition", values=(self.scalar.name,))
 
+def break_(self: behav.Break, context: "TreeGenContext"):
+	context.tree.insert(context.parent, tk.END, text="Break")
+
 def assignment(self: behav.Assignment, context: "TreeGenContext"):
 	context.push(context.tree.insert(context.parent, tk.END, text="Assignment"))
 
@@ -99,17 +110,30 @@ def conditional(self: behav.Conditional, context: "TreeGenContext"):
 	context.pop()
 
 	context.push(context.tree.insert(context.parent, tk.END, text="Statements"))
-	for op in self.stmts:
-		context.push(context.tree.insert(context.parent, tk.END, text="Statement"))
-		for stmt in op:
+	for stmt in self.stmts:
+		#context.push(context.tree.insert(context.parent, tk.END, text="Statement"))
+		#for stmt in op:
 			stmt.generate(context)
-		context.pop()
+		#context.pop()
 	context.pop()
 
 	context.pop()
 
 def loop(self: behav.Loop, context: "TreeGenContext"):
-	return self
+	context.push(context.tree.insert(context.parent, tk.END, text="Loop"))
+
+	context.tree.insert(context.parent, tk.END, text="Post Test", values=(self.post_test,))
+
+	context.push(context.tree.insert(context.parent, tk.END, text="Condition"))
+	self.cond.generate(context)
+	context.pop()
+
+	context.push(context.tree.insert(context.parent, tk.END, text="Statements"))
+	for stmt in self.stmts:
+		stmt.generate(context)
+	context.pop()
+
+	context.pop()
 
 def ternary(self: behav.Ternary, context: "TreeGenContext"):
 	context.push(context.tree.insert(context.parent, tk.END, text="Ternary"))

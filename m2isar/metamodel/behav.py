@@ -11,12 +11,17 @@ of an M2-ISA-R model, this means the functional behavior of functions
 and instructions. Behavior is modeled as a tree of instances of the classes
 in this module. This object tree can then be traversed with transformation
 functions to generate code or transform the tree.
+
+All classes in this module should inherit from :class:`BaseNode`, but never implement
+the `generate` method here. This method is dynamically overwritten during runtime depending
+on which translation module is loaded using :func:`patch_model`.
 """
 
 from typing import TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
-	from .arch import BitFieldDescr, Constant, FnParam, Function, Memory, Scalar
+	from .arch import (BitFieldDescr, Constant, FnParam, Function, Intrinsic,
+	                   Memory, Scalar)
 
 # pylint: disable=abstract-method
 
@@ -44,6 +49,9 @@ class Operation(BaseNode):
 
 	def __init__(self, statements: "list[BaseNode]") -> None:
 		self.statements = statements
+
+class Block(Operation):
+	"""A seperated code block"""
 
 class BinaryOperation(BaseNode):
 	"""A binary operation with a left-hand and a right-hand operand as well
@@ -108,7 +116,7 @@ class Conditional(BaseNode):
 	condition is present is treated as an else statement.
 	"""
 
-	def __init__(self, conds: "list[BaseNode]", stmts: "list[list[BaseNode]]"):
+	def __init__(self, conds: "list[BaseNode]", stmts: "list[BaseNode]"):
 		self.conds = conds
 		self.stmts = stmts
 
@@ -144,6 +152,9 @@ class Return(BaseNode):
 	def __init__(self, expr: BaseNode):
 		self.expr = expr
 
+class Break(BaseNode):
+	"""A break statement."""
+
 class UnaryOperation(BaseNode):
 	"""An unary operation, whith an operator and a right hand operand."""
 
@@ -154,7 +165,7 @@ class UnaryOperation(BaseNode):
 class NamedReference(BaseNode):
 	"""A named reference to a :class:`arch.Memory`, BitFieldDescr, Scalar, Constant or FnParam."""
 
-	def __init__(self, reference: Union["Memory", "BitFieldDescr", "Scalar", "Constant", "FnParam"]):
+	def __init__(self, reference: Union["Memory", "BitFieldDescr", "Scalar", "Constant", "FnParam", "Intrinsic"]):
 		self.reference = reference
 
 class IndexedReference(BaseNode):

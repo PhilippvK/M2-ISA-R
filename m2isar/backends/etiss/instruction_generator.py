@@ -26,7 +26,7 @@ def generate_arg_str(arg: arch.FnParam):
 	arg_name = f" {arg.name}" if arg.name is not None else ""
 	return f'{instruction_utils.data_type_map[arg.data_type]}{arg.actual_size}{arg_name}'
 
-def generate_functions(core: arch.CoreDef, static_scalars: bool):
+def generate_functions(core: arch.CoreDef, static_scalars: bool, decls_only: bool):
 	"""Return a generator object to generate function behavior code. Uses function
 	definitions in the core object.
 	"""
@@ -42,8 +42,8 @@ def generate_functions(core: arch.CoreDef, static_scalars: bool):
 	for fn_name, fn_def in core.functions.items():
 		logger.debug("setting up function generator for %s", fn_name)
 
-		#if fn_def.extern:
-		#	continue
+		if fn_def.extern and not decls_only:
+			continue
 
 		return_type = instruction_utils.data_type_map[fn_def.data_type]
 		if fn_def.size:
@@ -51,12 +51,15 @@ def generate_functions(core: arch.CoreDef, static_scalars: bool):
 
 		# set up a transformer context and generate code
 		context = instruction_utils.TransformerContext(core.constants, core.memories, core.memory_aliases, fn_def.args, fn_def.attributes,
-			core.functions, 0, core_default_width, core_name, static_scalars, True)
+			core.functions, 0, core_default_width, core_name, static_scalars, core.intrinsics, True)
 
 		logger.debug("generating code for %s", fn_name)
 
-		out_code: "CodePartsContainer" = fn_def.operation.generate(context)
-		out_code.format(ARCH_NAME=core_name)
+		out_code = instruction_utils.CodePartsContainer()
+
+		if not decls_only:
+			out_code = fn_def.operation.generate(context)
+			out_code.format(ARCH_NAME=core_name)
 
 		#fn_def.static = not context.used_arch_data
 
@@ -151,7 +154,7 @@ def generate_instruction_callback(core: arch.CoreDef, instr_def: arch.Instructio
 	callback_template = Template(filename=str(template_dir/'etiss_instruction_callback.mako'))
 
 	context = instruction_utils.TransformerContext(core.constants, core.memories, core.memory_aliases, instr_def.fields, instr_def.attributes,
-		core.functions, enc_idx, core_default_width, core_name, static_scalars)
+		core.functions, enc_idx, core_default_width, core_name, static_scalars, core.intrinsics)
 
 	# force a block end if necessary
 	if ((arch.InstrAttribute.NO_CONT in instr_def.attributes and arch.InstrAttribute.COND not in instr_def.attributes and block_end_on == BlockEndType.UNCOND)
@@ -172,8 +175,8 @@ def generate_instruction_callback(core: arch.CoreDef, instr_def: arch.Instructio
 		misc_code=misc_code,
 		fields_code=fields_code,
 		operation=out_code,
-		reg_dependencies=context.dependent_regs,
-		reg_affected=context.affected_regs,
+		reg_dependencies=[],	#context.dependent_regs,
+		reg_affected=[],		#context.affected_regs,
 		core_default_width=core_default_width,
 	)
 
@@ -216,7 +219,7 @@ def generate_instructions(core: arch.CoreDef, static_scalars: bool, block_end_on
 					[cond[0]],
 					[
 						instr_def.operation.statements,
-						[behav.ProcedureCall(error_fn, [behav.IntLiteral(-11)])]
+						behav.ProcedureCall(error_fn, [behav.IntLiteral(-11)])
 					]
 				)
 			])

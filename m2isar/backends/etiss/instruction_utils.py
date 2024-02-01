@@ -61,6 +61,10 @@ class CodeString:
 		return actual_size(self.size)
 
 	@property
+	def needs_fn_call(self):
+		return len(self.function_calls) > 0
+
+	@property
 	def is_mem_access(self):
 		return len(self.mem_ids) > 0
 
@@ -126,7 +130,7 @@ class TransformerContext:
 
 	def __init__(self, constants: "dict[str, arch.Constant]", memories: "dict[str, arch.Memory]", memory_aliases: "dict[str, arch.Memory]",
 			fields: "dict[str, arch.BitFieldDescr]", attributes: "list[arch.InstrAttribute]", functions: "dict[str, arch.Function]",
-			instr_size: int, native_size: int, arch_name: str, static_scalars: bool, ignore_static=False):
+			instr_size: int, native_size: int, arch_name: str, static_scalars: bool, intrinsics, ignore_static=False):
 
 		self.constants = constants
 		self.memories = memories
@@ -137,6 +141,7 @@ class TransformerContext:
 		self.instr_size = instr_size
 		self.native_size = native_size
 		self.arch_name = arch_name
+		self.intrinsics = intrinsics
 		self.static_scalars = static_scalars
 
 		self.ignore_static = ignore_static
@@ -177,7 +182,7 @@ class TransformerContext:
 		if self.ignore_static:
 			return val
 
-		return Template(f'" + std::to_string({val}) + "{sign[signed]}').safe_substitute(**replacements.rename_static)
+		return Template(f'" + std::to_string({val}) + "{sign[signed]}LL').safe_substitute(**replacements.rename_static)
 
 	def wrap_codestring(self, val, static=False):
 		"""Wrap an entire static line."""
