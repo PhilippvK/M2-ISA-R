@@ -6,11 +6,16 @@
 # Chair of Electrical Design Automation
 # Technical University of Munich
 
+"""Transformation functions to determine which scalars in a function or instruction
+behavior are to be considered static.
+"""
+
 import dataclasses
 
 from ...metamodel import arch, behav
 from ...metamodel.utils import ScalarStaticnessContext, StaticType
 
+# pylint: disable=unused-argument
 
 def operation(self: behav.Operation, context: ScalarStaticnessContext):
 	statements = []
@@ -52,10 +57,13 @@ def scalar_definition(self: behav.ScalarDefinition, context: ScalarStaticnessCon
 	self.scalar.static = StaticType.RW
 	return StaticType.RW
 
-def assignment(self: behav.Assignment, context: ScalarStaticnessContext):
-	target = self.target.generate(context)
+def break_(self: behav.Break, context):
+	return StaticType.READ
 
-	if context.context_is_static != StaticType.NONE:
+def assignment(self: behav.Assignment, context: ScalarStaticnessContext):
+	self.target.generate(context)
+
+	if context.context_is_static != StaticType.NONE or isinstance(self.target, behav.ScalarDefinition):
 		expr = self.expr.generate(context)
 
 		if expr != StaticType.NONE:
@@ -73,12 +81,12 @@ def assignment(self: behav.Assignment, context: ScalarStaticnessContext):
 def conditional(self: behav.Conditional, context: ScalarStaticnessContext):
 	conds = [x.generate(context) for x in self.conds]
 	stmt_context = dataclasses.replace(context, context_is_static=min(conds))
-	stmts = [[y.generate(stmt_context) for y in x] for x in self.stmts]
+	_ = [x.generate(stmt_context) for x in self.stmts]
 
 def loop(self: behav.Loop, context: ScalarStaticnessContext):
 	cond = self.cond.generate(context)
 	stmt_context = dataclasses.replace(context, context_is_static=cond)
-	stmts = [x.generate(stmt_context) for x in self.stmts]
+	_ = [x.generate(stmt_context) for x in self.stmts]
 
 def ternary(self: behav.Ternary, context: ScalarStaticnessContext):
 	cond = self.cond.generate(context)
@@ -88,9 +96,10 @@ def ternary(self: behav.Ternary, context: ScalarStaticnessContext):
 	return min(cond, then_expr, else_expr)
 
 def return_(self: behav.Return, context: ScalarStaticnessContext):
-	expr = self.expr.generate(context)
+	if self.expr is not None:
+		return self.expr.generate(context)
 
-	return expr
+	return StaticType.RW
 
 def unary_operation(self: behav.UnaryOperation, context: ScalarStaticnessContext):
 	right = self.right.generate(context)
@@ -111,7 +120,7 @@ def named_reference(self: behav.NamedReference, context: ScalarStaticnessContext
 	return static_map.get(type(self.reference), StaticType.NONE)
 
 def indexed_reference(self: behav.IndexedReference, context: ScalarStaticnessContext):
-	index = self.index.generate(context)
+	self.index.generate(context)
 
 	return StaticType.NONE
 
@@ -120,7 +129,7 @@ def type_conv(self: behav.TypeConv, context: ScalarStaticnessContext):
 
 	return expr
 
-def callable(self: behav.Callable, context: ScalarStaticnessContext):
+def callable_(self: behav.Callable, context: ScalarStaticnessContext):
 	args = [arg.generate(context) for arg in self.args]
 	args.append(StaticType.READ if self.ref_or_name.static else StaticType.NONE)
 

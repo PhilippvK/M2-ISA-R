@@ -12,16 +12,25 @@
 
 PROJECT(${core_name})
 
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+SET(CMAKE_INSTALL_RPATH "\$ORIGIN/../../include/jit/etiss/jit")
+
 ADD_LIBRARY($${}{PROJECT_NAME} SHARED
 	${core_name}Arch.cpp
 	${core_name}ArchLib.cpp
 	${core_name}ArchSpecificImp.cpp
+	${core_name}Funcs.c
 	% for f in arch_files:
 	${f}
 	% endfor
 )
 
-FILE(COPY "$${}{CMAKE_CURRENT_LIST_DIR}/$${}{PROJECT_NAME}Funcs.h" DESTINATION "$${}{ETISS_BINARY_DIR}/include/jit/Arch/$${}{PROJECT_NAME}")
+add_custom_command(
+	TARGET $${}{PROJECT_NAME} POST_BUILD
+	COMMAND $${}{CMAKE_COMMAND} -E copy
+		"$${}{CMAKE_CURRENT_LIST_DIR}/$${}{PROJECT_NAME}Funcs.h"
+		"$${}{ETISS_BINARY_DIR}/include/jit/Arch/$${}{PROJECT_NAME}"
+)
 INSTALL(FILES "$${}{CMAKE_CURRENT_LIST_DIR}/$${}{PROJECT_NAME}Funcs.h" DESTINATION "include/jit/Arch/$${}{PROJECT_NAME}")
 
 ETISSPluginArch($${}{PROJECT_NAME})
