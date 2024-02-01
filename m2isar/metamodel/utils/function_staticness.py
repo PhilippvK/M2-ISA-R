@@ -10,6 +10,8 @@
 
 from ...metamodel import arch, behav
 
+# pylint: disable=unused-argument
+
 def operation(self: behav.Operation, context):
 	statements = []
 	for stmt in self.statements:
@@ -49,6 +51,9 @@ def int_literal(self: behav.IntLiteral, context):
 def scalar_definition(self: behav.ScalarDefinition, context):
 	return True
 
+def break_(self: behav.Break, context):
+	return True
+
 def assignment(self: behav.Assignment, context):
 	target = self.target.generate(context)
 	expr = self.expr.generate(context)
@@ -57,7 +62,7 @@ def assignment(self: behav.Assignment, context):
 
 def conditional(self: behav.Conditional, context):
 	conds = [x.generate(context) for x in self.conds]
-	stmts = [all(y.generate(context) for y in x) for x in self.stmts]
+	stmts = [x.generate(context) for x in self.stmts]
 
 	conds.extend(stmts)
 
@@ -78,9 +83,10 @@ def ternary(self: behav.Ternary, context):
 	return all([cond, then_expr, else_expr])
 
 def return_(self: behav.Return, context):
-	expr = self.expr.generate(context)
+	if self.expr is not None:
+		return self.expr.generate(context)
 
-	return expr
+	return True
 
 def unary_operation(self: behav.UnaryOperation, context):
 	right = self.right.generate(context)
@@ -96,13 +102,14 @@ def named_reference(self: behav.NamedReference, context):
 		arch.BitFieldDescr: True,
 		arch.Constant: True,
 		arch.FnParam: True,
-		arch.Scalar: True
+		arch.Scalar: True,
+		arch.Intrinsic: False
 	}
 
 	return static_map.get(type(self.reference), False)
 
 def indexed_reference(self: behav.IndexedReference, context):
-	index = self.index.generate(context)
+	self.index.generate(context)
 
 	return False
 
@@ -111,7 +118,7 @@ def type_conv(self: behav.TypeConv, context):
 
 	return expr
 
-def callable(self: behav.Callable, context):
+def callable_(self: behav.Callable, context):
 	args = [arg.generate(context) for arg in self.args]
 	args.append(self.ref_or_name.static)
 

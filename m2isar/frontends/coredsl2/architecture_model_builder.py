@@ -10,10 +10,10 @@ import itertools
 import logging
 from typing import Union
 
-from ... import M2DuplicateError, M2NameError, M2TypeError, M2ValueError
-from ...metamodel import arch, behav
+from ... import M2DuplicateError, M2NameError, M2TypeError, M2ValueError, flatten
+from ...metamodel import arch, behav, intrinsics
 from .parser_gen import CoreDSL2Parser, CoreDSL2Visitor
-from .utils import RADIX, SHORTHANDS, SIGNEDNESS, flatten_list
+from .utils import RADIX, SHORTHANDS, SIGNEDNESS
 
 logger = logging.getLogger("arch_builder")
 
@@ -24,6 +24,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 	_constants: "dict[str, arch.Constant]"
 	_instructions: "dict[str, arch.Instruction]"
 	_functions: "dict[str, arch.Function]"
+	_always_blocks: "dict[str, arch.AlwaysBlock]"
 	_instruction_sets: "dict[str, arch.InstructionSet]"
 	_read_types: "dict[str, str]"
 	_memories: "dict[str, arch.Memory]"
@@ -37,6 +38,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 		self._constants = {}
 		self._instructions = {}
 		self._functions = {}
+		self._always_blocks = {}
 		self._instruction_sets = {}
 		self._read_types = {}
 		self._memories = {}
@@ -75,7 +77,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 			extension = [obj.text for obj in ctx.extension]
 
 		# generate flat list of instruction set contents
-		contents = flatten_list([self.visit(obj) for obj in ctx.sections])
+		contents = flatten([self.visit(obj) for obj in ctx.sections])
 
 		constants = {}
 		memories = {}
@@ -94,6 +96,8 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 			elif isinstance(item, arch.Instruction):
 				instructions[(item.code, item.mask)] = item
 				item.ext_name = name
+			elif isinstance(item, arch.AlwaysBlock):
+				pass
 			else:
 				raise M2ValueError("unexpected item encountered")
 
@@ -101,11 +105,22 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 		i = arch.InstructionSet(name, extension, constants, memories, functions, instructions)
 
 		if name in self._instruction_sets:
-			raise M2DuplicateError(f"instruction set {name} already defined")
+			raise M2DuplicateError(f"instruction set \"{name}\" already defined")
 
 		# keep track of instruction set object
 		self._instruction_sets[name] = i
 		return i
+
+	def visitSection_instructions(self, ctx: CoreDSL2Parser.Section_instructionsContext):
+		attributes = dict([self.visit(obj) for obj in ctx.attributes])
+		instructions: "list[arch.Instruction]" = [self.visit(obj) for obj in ctx.instructions]
+
+		for attr, val in attributes.items():
+			for instr in instructions:
+				if attr not in instr.attributes:
+					instr.attributes[attr] = val
+
+		return instructions
 
 	def visitCore_def(self, ctx: CoreDSL2Parser.Core_defContext):
 		"""Generate a top-level CoreDef object."""
@@ -116,7 +131,8 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 
 		c = arch.CoreDef(name, list(self._read_types.keys()), None,
 			self._constants, self._memories, self._memory_aliases,
-			self._functions, self._instructions, self._instr_classes)
+			self._functions, self._instructions, self._instr_classes,
+			intrinsics)
 
 		return c
 
@@ -129,6 +145,18 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 			self.visit(obj)
 
 		return decls
+
+	def visitAlways_block(self, ctx: CoreDSL2Parser.Always_blockContext):
+		"""Generate always block"""
+
+		name = ctx.name.text
+		attributes = dict([self.visit(obj) for obj in ctx.attributes])
+
+		a = arch.AlwaysBlock(name, attributes, ctx.behavior)
+
+		self._always_blocks[name] = a
+
+		return a
 
 	def visitInstruction(self, ctx: CoreDSL2Parser.InstructionContext):
 		"""Generate non-behavioral parts of an instruction."""
@@ -158,7 +186,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 		# decode attributes
 		attributes = dict([self.visit(obj) for obj in ctx.attributes])
 
-		if arch.FunctionAttribute.ETISS_EXC_ENTRY in attributes:
+		if arch.FunctionAttribute.ETISS_TRAP_ENTRY_FN in attributes:
 			attributes[arch.FunctionAttribute.ETISS_NEEDS_ARCH] = []
 
 		# decode return type and name
@@ -188,7 +216,9 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 
 		if f2 is not None:
 			if len(f2.operation.statements) > 0:
-				raise M2DuplicateError(f"function {name} already defined")
+				raise M2DuplicateError(f"function \"{name}\" already defined")
+
+			self._functions.pop(name)
 
 		self._functions[name] = f
 		return f
@@ -286,7 +316,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 				range = arch.RangeSpec(left, right)
 
 				#if range.length != size[0]:
-				#	raise ValueError(f"range mismatch for {name}")
+				#	raise ValueError(f"range mismatch for \"{name}\"")
 
 				# instantiate M2-ISA-R object, keep track of parent - child relations
 				m = arch.Memory(name, range, type_._width, attributes)
@@ -427,7 +457,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 		# try to resolve the reference, error out if invalid
 		ref = self._constants.get(name) or self._memories.get(name) or self._memory_aliases.get(name)
 		if ref is None:
-			raise M2NameError(f"reference {name} could not be resolved")
+			raise M2NameError(f"reference \"{name}\" could not be resolved")
 		return behav.NamedReference(ref)
 
 	def visitStorage_class_specifier(self, ctx: CoreDSL2Parser.Storage_class_specifierContext):

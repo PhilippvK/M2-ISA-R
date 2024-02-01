@@ -15,6 +15,11 @@ prefixes = {
 	#'R': '*((${ARCH_NAME}*)cpu)->'
 }
 
+rename_write = {
+	'PC': 'cpu->nextPc'
+#	'PC': 'cpu->instructionPointer'
+}
+
 rename_static = {
 	'PC': 'ic.current_address_'
 }

@@ -17,7 +17,8 @@ import time
 
 from m2isar.metamodel.arch import CoreDef
 
-from ...metamodel.utils.expr_preprocessor import (process_functions,
+from ...metamodel.utils.expr_preprocessor import (process_attributes,
+                                                  process_functions,
                                                   process_instructions)
 from . import BlockEndType
 from .architecture_writer import (write_arch_cmake, write_arch_cpp,
@@ -28,6 +29,49 @@ from .architecture_writer import (write_arch_cmake, write_arch_cpp,
 from .instruction_writer import write_functions, write_instructions
 
 
+class BooleanOptionalAction(argparse.Action):
+	"""A boolean optional action for argparse, supports automatic generation of --no-x flags."""
+
+	def __init__(self,
+				 option_strings,
+				 dest,
+				 default=None,
+				 type_=None,
+				 choices=None,
+				 required=False,
+				 help=None,
+				 metavar=None):
+
+		_option_strings = []
+		for option_string in option_strings:
+			_option_strings.append(option_string)
+
+			if option_string.startswith('--'):
+				option_string = '--no-' + option_string[2:]
+				_option_strings.append(option_string)
+
+		if help is not None and default is not None and default is not argparse.SUPPRESS:
+			help += " (default: %(default)s)"
+
+		super().__init__(
+			option_strings=_option_strings,
+			dest=dest,
+			nargs=0,
+			default=default,
+			type=type_,
+			choices=choices,
+			required=required,
+			help=help,
+			metavar=metavar)
+
+	def __call__(self, parser, namespace, values, option_string=None):
+		if option_string in self.option_strings:
+			setattr(namespace, self.dest, not option_string.startswith('--no-'))
+
+	def format_usage(self):
+		return ' | '.join(self.option_strings)
+
+
 def setup():
 	"""Setup a M2-ISA-R metamodel consumer. Create an argument parser, unpickle the model
 	and generate output file structure.
@@ -36,9 +80,10 @@ def setup():
 	# read command line arguments
 	parser = argparse.ArgumentParser()
 	parser.add_argument('top_level', help="A .m2isarmodel file containing the models to generate.")
-	parser.add_argument('-s', '--separate', action='store_true', help="Generate separate .cpp files for each instruction set.")
-	parser.add_argument("--static-scalars", action="store_true", help="Enable crude static detection for scalars. WARNING: known to break!")
-	parser.add_argument("--block-end-on", default="none", choices=[x.name.lower() for x in BlockEndType], help="Force end translation blocks on no instructions, uncoditional jumps or all jumps.")
+	parser.add_argument('--separate', action=BooleanOptionalAction, default=True, help="Generate separate .cpp files for each instruction set.")
+	parser.add_argument("--static-scalars", action=BooleanOptionalAction, default=True, help="Enable static detection for scalars.")
+	parser.add_argument("--block-end-on", default="none", choices=[x.name.lower() for x in BlockEndType],
+		help="Force end translation blocks on no instructions, uncoditional jumps or all jumps.")
 	parser.add_argument("--log", default="info", choices=["critical", "error", "warning", "info", "debug"])
 	args = parser.parse_args()
 
@@ -76,6 +121,8 @@ def setup():
 	return (models, logger, output_base_path, spec_name, start_time, args)
 
 def main():
+	"""etiss_writer main entrypoint function."""
+
 	# setup etiss writer
 	models, logger, output_base_path, spec_name, start_time, args = setup()
 
@@ -84,6 +131,19 @@ def main():
 		logger.info("preprocessing model %s", core_name)
 		process_functions(core)
 		process_instructions(core)
+		process_attributes(core)
+
+		renamed_fns = {}
+
+		for fn_name, fn_def in core.functions.items():
+			if fn_def.extern:
+				renamed_fns[fn_name] = fn_def
+			else:
+				new_name = f"{core_name}_{fn_def.name}"
+				fn_def.name = new_name
+				renamed_fns[new_name] = fn_def
+
+		core.functions = renamed_fns
 
 	# generate each core in the model
 	for core_name, core in models.items():

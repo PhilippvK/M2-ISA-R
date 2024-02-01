@@ -19,7 +19,8 @@ from tkinter import ttk
 from m2isar.backends.viewer.utils import TreeGenContext
 
 from ...metamodel import arch, patch_model
-from ...metamodel.utils.expr_preprocessor import (process_functions,
+from ...metamodel.utils.expr_preprocessor import (process_attributes,
+                                                  process_functions,
                                                   process_instructions)
 from . import treegen
 
@@ -28,7 +29,7 @@ logger = logging.getLogger("viewer")
 
 def sort_instruction(entry: "tuple[tuple[int, int], arch.Instruction]"):
 	"""Instruction sort key function. Sorts most restrictive encoding first."""
-	(code, mask), instr_def = entry
+	(code, mask), _ = entry
 	return bin(mask).count("1"), code
 	#return code, bin(mask).count("1")
 
@@ -44,7 +45,6 @@ def main():
 
 	# initialize logging
 	logging.basicConfig(level=getattr(logging, args.log.upper()))
-	logger = logging.getLogger("etiss_writer")
 
 	# resolve model paths
 	top_level = pathlib.Path(args.top_level)
@@ -61,7 +61,6 @@ def main():
 			raise FileNotFoundError('Models not generated!')
 		model_fname = model_path / (abs_top_level.stem + '.m2isarmodel')
 
-	spec_name = abs_top_level.stem
 	output_base_path = search_path.joinpath('gen_output')
 	output_base_path.mkdir(exist_ok=True)
 
@@ -76,6 +75,7 @@ def main():
 		logger.info("preprocessing model %s", core_name)
 		process_functions(core)
 		process_instructions(core)
+		process_attributes(core)
 
 	# load Ttk TreeView transformer functions
 	patch_model(treegen)
@@ -197,7 +197,6 @@ def main():
 	#tree.tag_configure("mono", font=font.nametofont("TkFixedFont"))
 
 	root.mainloop()
-	pass
 
 if __name__ == "__main__":
 	main()
