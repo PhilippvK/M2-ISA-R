@@ -6,7 +6,23 @@
 # Chair of Electrical Design Automation
 # Technical University of Munich
 
+"""A transformation module for simplifying M2-ISA-R behavior expressions. The following
+simplifications are done:
+
+* Resolvable :class:`m2isar.metamodel.arch.Constant` s are replaced by
+  `m2isar.metamodel.arch.IntLiteral` s representing their value
+* Fully resolvable arithmetic operations are carried out and their results
+  represented as a matching :class:`m2isar.metamodel.arch.IntLiteral`
+* Conditions and loops with fully resolvable conditions are either discarded entirely
+  or transformed into code blocks without any conditions
+* Ternaries with fully resolvable conditions are transformed into only the matching part
+* Type conversions of :class:`m2isar.metamodel.arch.IntLiteral` s apply the desired
+  type directly to the :class:`IntLiteral` and discard the type conversion
+"""
+
 from ...metamodel import arch, behav
+
+# pylint: disable=unused-argument
 
 def operation(self: behav.Operation, context):
 	statements = []
@@ -17,7 +33,7 @@ def operation(self: behav.Operation, context):
 				statements.extend(temp)
 			else:
 				statements.append(temp)
-		except (NotImplementedError, ValueError) as e:
+		except (NotImplementedError, ValueError):
 			print(f"cant simplify {stmt}")
 
 	self.statements = statements
@@ -36,8 +52,35 @@ def binary_operation(self: behav.BinaryOperation, context):
 			self.right.bit_size = self.left.reference.size
 
 	if isinstance(self.left, behav.IntLiteral) and isinstance(self.right, behav.IntLiteral):
+		# pylint: disable=eval-used
 		res: int = int(eval(f"{self.left.value}{self.op.value}{self.right.value}"))
 		return behav.IntLiteral(res, max(self.left.bit_size, self.right.bit_size, res.bit_length()))
+
+	if self.op.value == "&&":
+		if isinstance(self.left, behav.IntLiteral):
+			if self.left.value:
+				return self.right
+			else:
+				return self.left
+
+		if isinstance(self.right, behav.IntLiteral):
+			if self.right.value:
+				return self.left
+			else:
+				return self.right
+
+	if self.op.value == "||":
+		if isinstance(self.left, behav.IntLiteral):
+			if self.left.value:
+				return self.left
+			else:
+				return self.right
+
+		if isinstance(self.right, behav.IntLiteral):
+			if self.right.value:
+				return self.right
+			else:
+				return self.left
 
 	return self
 
@@ -63,7 +106,11 @@ def int_literal(self: behav.IntLiteral, context):
 def scalar_definition(self: behav.ScalarDefinition, context):
 	return self
 
+def break_(self: behav.Break, context):
+	return self
+
 def assignment(self: behav.Assignment, context):
+	self.target = self.target.generate(context)
 	self.expr = self.expr.generate(context)
 
 	if isinstance(self.expr, behav.IntLiteral) and isinstance(self.target, (behav.NamedReference, behav.IndexedReference)):
@@ -77,7 +124,7 @@ def assignment(self: behav.Assignment, context):
 
 def conditional(self: behav.Conditional, context):
 	self.conds = [x.generate(context) for x in self.conds]
-	self.stmts = [[y.generate(context) for y in x] for x in self.stmts]
+	self.stmts = [x.generate(context) for x in self.stmts]
 
 	eval_false = True
 
@@ -95,7 +142,7 @@ def conditional(self: behav.Conditional, context):
 
 	if len(self.conds) < len(self.stmts):
 		if eval_false and isinstance(self.conds[-1], behav.IntLiteral):
-			if not cond.value:
+			if not cond.value: # pylint: disable=undefined-loop-variable
 				return self.stmts[-1]
 		stmts.append(self.stmts[-1])
 
@@ -118,19 +165,21 @@ def ternary(self: behav.Ternary, context):
 	if isinstance(self.cond, behav.IntLiteral):
 		if self.cond.value:
 			return self.then_expr
-		else:
-			return self.else_expr
+
+		return self.else_expr
 
 	return self
 
 def return_(self: behav.Return, context):
-	self.expr = self.expr.generate(context)
+	if self.expr is not None:
+		self.expr = self.expr.generate(context)
 
 	return self
 
 def unary_operation(self: behav.UnaryOperation, context):
 	self.right = self.right.generate(context)
 	if isinstance(self.right, behav.IntLiteral):
+		# pylint: disable=eval-used
 		res: int = eval(f"{self.op.value}{self.right.value}")
 		return behav.IntLiteral(res, max(self.right.bit_size, res.bit_length()))
 
@@ -159,9 +208,8 @@ def type_conv(self: behav.TypeConv, context):
 
 	return self
 
-def callable(self: behav.Callable, context):
-	for stmt in self.args:
-		stmt = stmt.generate(context)
+def callable_(self: behav.Callable, context):
+	self.args = [stmt.generate(context) for stmt in self.args]
 
 	return self
 

@@ -6,4 +6,6 @@
 # Chair of Electrical Design Automation
 # Technical University of Munich
 
--e .
+mako
+antlr4-python3-runtime~=4.13.1
+antlr4-tools
