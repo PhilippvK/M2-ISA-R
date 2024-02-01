@@ -13,7 +13,11 @@ import pathlib
 
 from mako.template import Template
 
-from ...metamodel import arch
+from ... import M2TypeError
+from ...metamodel import arch, behav
+from . import BlockEndType
+from .instruction_generator import (generate_fields,
+                                    generate_instruction_callback)
 from .templates import template_dir
 
 logger = logging.getLogger("arch_writer")
@@ -47,7 +51,7 @@ def write_arch_struct(core: arch.CoreDef, start_time: str, output_path: pathlib.
 
 	logger.info("writing architecture struct")
 
-	for mem_name, mem_desc in core.memories.items():
+	for _, mem_desc in core.memories.items():
 		write_child_reg_def(mem_desc, regs)
 
 	txt = arch_struct_template.render(
@@ -56,7 +60,7 @@ def write_arch_struct(core: arch.CoreDef, start_time: str, output_path: pathlib.
 		regs=regs
 	)
 
-	with open(output_path / f"{core.name}.h", "w") as f:
+	with open(output_path / f"{core.name}.h", "w", encoding="utf-8") as f:
 		f.write(txt)
 
 def write_arch_header(core: arch.CoreDef, start_time: str, output_path: pathlib.Path):
@@ -70,10 +74,11 @@ def write_arch_header(core: arch.CoreDef, start_time: str, output_path: pathlib.
 		instr_classes=sorted(core.instr_classes)
 	)
 
-	with open(output_path / f"{core.name}Arch.h", "w") as f:
+	with open(output_path / f"{core.name}Arch.h", "w", encoding="utf-8") as f:
 		f.write(txt)
 
-def build_reg_hierarchy(reg: arch.Memory, ptr_regs: "list[arch.Memory]", actual_regs: "list[arch.Memory]", alias_regs: "dict[arch.Memory, arch.Memory]", initval_regs: "list[arch.Memory]"):
+def build_reg_hierarchy(reg: arch.Memory, ptr_regs: "list[arch.Memory]", actual_regs: "list[arch.Memory]",
+		alias_regs: "dict[arch.Memory, arch.Memory]", initval_regs: "list[arch.Memory]"):
 	"""Populate the passed lists with memory objects of their category.
 
 	ptr_regs: Registers that need to be a pointer within ETISS
@@ -82,6 +87,7 @@ def build_reg_hierarchy(reg: arch.Memory, ptr_regs: "list[arch.Memory]", actual_
 	initval_regs: Registers which have initial value(s) defined in the model
 	"""
 
+	# pylint: disable=protected-access
 	if reg._initval:
 		initval_regs.append(reg)
 
@@ -109,7 +115,7 @@ def write_arch_cpp(core: arch.CoreDef, start_time: str, output_path: pathlib.Pat
 	logger.info("writing architecture class file")
 
 	# determine memory types
-	for mem_name, mem_desc in core.memories.items():
+	for _, mem_desc in core.memories.items():
 		if mem_desc.is_main_mem:
 			continue
 		build_reg_hierarchy(mem_desc, ptr_regs, actual_regs, alias_regs, initval_regs)
@@ -136,7 +142,7 @@ def write_arch_cpp(core: arch.CoreDef, start_time: str, output_path: pathlib.Pat
 		initval_regs=initval_regs
 	)
 
-	with open(output_path / f"{core.name}Arch.cpp", "w") as f:
+	with open(output_path / f"{core.name}Arch.cpp", "w", encoding="utf-8") as f:
 		f.write(txt)
 
 def write_arch_lib(core: arch.CoreDef, start_time: str, output_path: pathlib.Path):
@@ -149,7 +155,7 @@ def write_arch_lib(core: arch.CoreDef, start_time: str, output_path: pathlib.Pat
 		core_name=core.name
 	)
 
-	with open(output_path / f"{core.name}ArchLib.cpp", "w") as f:
+	with open(output_path / f"{core.name}ArchLib.cpp", "w", encoding="utf-8") as f:
 		f.write(txt)
 
 def write_arch_specific_header(core: arch.CoreDef, start_time: str, output_path: pathlib.Path):
@@ -164,21 +170,63 @@ def write_arch_specific_header(core: arch.CoreDef, start_time: str, output_path:
 		float_reg=core.float_reg_file
 	)
 
-	with open(output_path / f"{core.name}ArchSpecificImp.h", "w") as f:
+	with open(output_path / f"{core.name}ArchSpecificImp.h", "w", encoding="utf-8") as f:
 		f.write(txt)
 
 def write_arch_specific_cpp(core: arch.CoreDef, start_time: str, output_path: pathlib.Path):
 	arch_header_template = Template(filename=str(template_dir/'etiss_arch_specific_cpp.mako'))
 
+	error_fn = None
+
+	for fn in core.functions.values():
+		if arch.FunctionAttribute.ETISS_TRAP_ENTRY_FN in fn.attributes:
+			error_fn = fn
+			break
+
+	for fn in core.functions.values():
+		if arch.FunctionAttribute.ETISS_TRAP_TRANSLATE_FN in fn.attributes:
+			error_fn = fn
+			break
+
+	error_callbacks: "dict[int, str]" = {}
+
+	if error_fn is not None:
+		for bitsize in core.instr_classes:
+			error_bitfield = arch.BitField("error_code", arch.RangeSpec(31, 0), arch.DataType.U)
+			error_instr = arch.Instruction(f"trap_entry {bitsize}", {arch.InstrAttribute.NO_CONT: None}, [error_bitfield], "", None)
+			error_bitfield_descr = error_instr.fields.get("error_code")
+			error_op = behav.Operation([
+				behav.ProcedureCall(error_fn, [behav.NamedReference(error_bitfield_descr)])
+			])
+			error_instr.operation = error_op
+			error_instr.throws = True
+			error_instr._size = bitsize # pylint: disable=protected-access
+
+			error_fields = generate_fields(32, error_instr)
+			error_callbacks[bitsize] = generate_instruction_callback(core, error_instr, error_fields, True, BlockEndType.NONE)
+
 	logger.info("writing architecture specific file")
+
+	global_irq_en_mask = None
+	if core.global_irq_en_memory is not None:
+		attr = core.global_irq_en_memory.attributes[arch.MemoryAttribute.ETISS_IS_GLOBAL_IRQ_EN][0]
+		if not isinstance(attr, behav.IntLiteral):
+			raise M2TypeError(f"IRQ enable mask of {core.global_irq_en_memory.name} is not compile static")
+		global_irq_en_mask = attr.value
 
 	txt = arch_header_template.render(
 		start_time=start_time,
 		core_name=core.name,
-		main_reg=core.main_reg_file
+		main_reg=core.main_reg_file,
+		irq_en_reg=core.irq_en_memory,
+		irq_pending_reg=core.irq_pending_memory,
+		global_irq_en_reg=core.global_irq_en_memory,
+		global_irq_en_mask=global_irq_en_mask,
+		error_callbacks=error_callbacks,
+		error_fn=error_fn
 	)
 
-	with open(output_path / f"{core.name}ArchSpecificImp.cpp", "w") as f:
+	with open(output_path / f"{core.name}ArchSpecificImp.cpp", "w", encoding="utf-8") as f:
 		f.write(txt)
 
 def write_arch_gdbcore(core: arch.CoreDef, start_time: str, output_path: pathlib.Path):
@@ -192,7 +240,7 @@ def write_arch_gdbcore(core: arch.CoreDef, start_time: str, output_path: pathlib
 		main_reg=core.main_reg_file
 	)
 
-	with open(output_path / f"{core.name}GDBCore.h", "w") as f:
+	with open(output_path / f"{core.name}GDBCore.h", "w", encoding="utf-8") as f:
 		f.write(txt)
 
 def write_arch_cmake(core: arch.CoreDef, start_time: str, output_path: pathlib.Path, separate: bool):
@@ -213,5 +261,5 @@ def write_arch_cmake(core: arch.CoreDef, start_time: str, output_path: pathlib.P
 		arch_files=arch_files
 	)
 
-	with open(output_path / "CMakeLists.txt", "w") as f:
+	with open(output_path / "CMakeLists.txt", "w", encoding="utf-8") as f:
 		f.write(txt)
