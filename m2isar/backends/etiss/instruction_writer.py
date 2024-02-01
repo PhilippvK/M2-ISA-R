@@ -26,12 +26,13 @@ def write_functions(core: arch.CoreDef, start_time: str, output_path: pathlib.Pa
 
 	fn_set_header_template = Template(filename=str(template_dir/'etiss_function_set_header.mako'))
 	fn_set_footer_template = Template(filename=str(template_dir/'etiss_function_set_footer.mako'))
+	fn_impl_template = Template(filename=str(template_dir/"etiss_functions_c.mako"))
 
 	core_name = core.name
 
 	logger.info("writing functions")
 
-	with open(output_path / f'{core_name}Funcs.h', 'w') as funcs_f:
+	with open(output_path / f'{core_name}Funcs.h', 'w', encoding="utf-8") as funcs_f:
 		# generate and write file header
 		fn_set_str = fn_set_header_template.render(
 			start_time=start_time,
@@ -40,16 +41,30 @@ def write_functions(core: arch.CoreDef, start_time: str, output_path: pathlib.Pa
 
 		funcs_f.write(fn_set_str)
 
-		# generate and write function bodies
-		for fn_name, templ_str in generate_functions(core, static_scalars):
-			logger.debug("writing function %s", fn_name)
+		# generate and write function declarations
+		for fn_name, templ_str in generate_functions(core, static_scalars, True):
+			logger.debug("writing function decl %s", fn_name)
 			funcs_f.write(templ_str)
 
 		fn_set_str = fn_set_footer_template.render()
 
 		funcs_f.write(fn_set_str)
 
-def write_instructions(core: arch.CoreDef, start_time: str, output_path: pathlib.Path, separate: bool, static_scalars: bool, block_end_on: BlockEndType):
+	with open(output_path / f'{core_name}Funcs.c', 'w', encoding="utf-8") as funcs_f:
+		fn_impl_str = fn_impl_template.render(
+			start_time=start_time,
+			core_name=core_name
+		)
+
+		funcs_f.write(fn_impl_str)
+
+		# generate and write function definitions
+		for fn_name, templ_str in generate_functions(core, static_scalars, False):
+			logger.debug("writing function def %s", fn_name)
+			funcs_f.write(templ_str)
+
+def write_instructions(core: arch.CoreDef, start_time: str, output_path: pathlib.Path, separate: bool, static_scalars: bool,
+	block_end_on: BlockEndType):
 	"""Generate and write the instruction model C++ files for ETISS."""
 
 	instr_set_template = Template(filename=str(template_dir/'etiss_instruction_set.mako'))
@@ -62,10 +77,13 @@ def write_instructions(core: arch.CoreDef, start_time: str, output_path: pathlib
 	with ExitStack() as stack:
 		# if desired use one C++ file for each instruction set extension
 		if separate:
-			outfiles = {ext_name: stack.enter_context(open(output_path / f'{core_name}_{ext_name}Instr.cpp', 'w')) for ext_name in core.contributing_types if len(core.instructions_by_ext[ext_name]) > 0}
+			outfiles = {
+				ext_name: stack.enter_context(open(output_path / f'{core_name}_{ext_name}Instr.cpp', 'w', encoding="utf-8"))
+				for ext_name in core.contributing_types if len(core.instructions_by_ext[ext_name]) > 0
+			}
 
 		# open a default file
-		outfiles['default'] = stack.enter_context(open(output_path / f'{core_name}Instr.cpp', 'w'))
+		outfiles['default'] = stack.enter_context(open(output_path / f'{core_name}Instr.cpp', 'w', encoding="utf-8"))
 
 		# generate file headers for each file
 		for extension_name, out_f in outfiles.items():
@@ -78,6 +96,6 @@ def write_instructions(core: arch.CoreDef, start_time: str, output_path: pathlib
 			out_f.write(instr_set_str)
 
 		# generate instruction behavior models
-		for instr_name, (code, mask), ext_name, templ_str in generate_instructions(core, static_scalars, block_end_on):
+		for instr_name, _, ext_name, templ_str in generate_instructions(core, static_scalars, block_end_on):
 			logger.debug("writing instruction %s", instr_name)
 			outfiles.get(ext_name, outfiles['default']).write(templ_str)

@@ -43,8 +43,6 @@
  *********************************************************************************************************************************/
 
 #include "${core_name}Arch.h"
-
-#define ETISS_ARCH_STATIC_FN_ONLY
 #include "${core_name}Funcs.h"
 
 #define ${core_name}_DEBUG_CALL 0
@@ -75,6 +73,7 @@ void ${core_name}Arch::resetCPU(ETISS_CPU * cpu,etiss::uint64 * startpointer)
 
 	if (startpointer) cpu->instructionPointer = *startpointer & ~((etiss::uint64)0x1);
 	else cpu->instructionPointer = 0x0;   //  reference to manual
+	cpu->nextPc = cpu->instructionPointer;
 	cpu->mode = 1;
 	cpu->cpuTime_ps = 0;
 	cpu->cpuCycleTime_ps = 31250;
@@ -168,8 +167,9 @@ void ${core_name}Arch::initCodeBlock(etiss::CodeBlock & cb) const
 {
 	cb.fileglobalCode().insert("#include \"Arch/${core_name}/${core_name}.h\"\n");
 	cb.fileglobalCode().insert("#include \"Arch/${core_name}/${core_name}Funcs.h\"\n");
-	cb.functionglobalCode().insert("((${core_name}*)cpu)->exception = 0;\n");
-	cb.functionglobalCode().insert("((${core_name}*)cpu)->exception_pending = 0;\n");
+	cb.functionglobalCode().insert("cpu->exception = 0;\n");
+	cb.functionglobalCode().insert("cpu->return_pending = 0;\n");
+	cb.functionglobalCode().insert("etiss_uint32 mem_ret_code = 0;\n");
 }
 
 etiss::plugin::gdb::GDBCore & ${core_name}Arch::getGDBCore()
