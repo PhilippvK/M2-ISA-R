@@ -126,10 +126,13 @@ void ${core_name}Arch::resetCPU(ETISS_CPU * cpu,etiss::uint64 * startpointer)
 <% ref = "*" if len(reg.children) > 0 else "" %> \
 	% if reg.range.length > 1:
 	% for idx, val in reg._initval.items():
-	${ref}${core_name.lower()}cpu->${reg.name}[${idx}] = ${val};
+<% suffix = "ULL" if val > 0 else "LL" %> \
+	${ref}${core_name.lower()}cpu->${reg.name}[${idx}] = ${val}${suffix};
 	% endfor
 	% else:
-	${ref}${core_name.lower()}cpu->${reg.name} = ${reg._initval[None]};
+<% val = reg._initval[None] %> \
+<% suffix = "ULL" if val > 0 else "LL" %> \
+	${ref}${core_name.lower()}cpu->${reg.name} = ${val}${suffix};
 	% endif
 	% endfor
 
