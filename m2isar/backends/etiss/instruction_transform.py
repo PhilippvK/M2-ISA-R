@@ -40,7 +40,7 @@ def operation(self: behav.Operation, context: TransformerContext):
 		else:
 			args.append(c)
 
-	if self.line_info is not None:
+	if self.line_info is not None and context.generate_coverage:
 		CodeInfoTracker.insert(context.arch_name, self.line_info)
 		code_lines.append(context.wrap_codestring(f"etiss_coverage_count(1, {self.line_info.id});"))
 
@@ -59,15 +59,16 @@ def operation(self: behav.Operation, context: TransformerContext):
 		before_line_infos = []
 		after_line_infos = []
 
-		for l in flatten(arg.line_infos):
-			if l is not None:
-				CodeInfoTracker.insert(context.arch_name, l)
+		if context.generate_coverage:
+			for l in flatten(arg.line_infos):
+				if l is not None:
+					CodeInfoTracker.insert(context.arch_name, l)
 
-				if l.placement == LineInfoPlacement.BEFORE:
-					before_line_infos.append(str(l.id))
+					if l.placement == LineInfoPlacement.BEFORE:
+						before_line_infos.append(str(l.id))
 
-				elif l.placement == LineInfoPlacement.AFTER:
-					after_line_infos.append(str(l.id))
+					elif l.placement == LineInfoPlacement.AFTER:
+						after_line_infos.append(str(l.id))
 
 		if len(before_line_infos) > 0:
 			code_lines.append(context.wrap_codestring(f"etiss_coverage_count({len(before_line_infos)}, {', '.join(before_line_infos)});"))
