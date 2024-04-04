@@ -108,7 +108,7 @@ class IntLiteral(NumberLiteral):
 		self.bit_size = max(1, self.bit_size)
 
 		if signed is None:
-			self.signed = value < 0
+			self.signed = value <= 0
 		else:
 			self.signed = signed
 
