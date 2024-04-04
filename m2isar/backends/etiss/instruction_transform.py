@@ -530,6 +530,7 @@ def slice_operation(self: behav.SliceOperation, context: TransformerContext):
 	try:
 		new_size = int(left.code.replace("U", "").replace("L", "")) - int(right.code.replace("U", "").replace("L", "")) + 1
 		mask = (1 << (int(left.code.replace("U", "").replace("L", "")) - int(right.code.replace("U", "").replace("L", "")) + 1)) - 1
+		mask = f"{mask}ULL"
 
 	# slice with actual lower and upper bound code if not possible to slice with integers
 	except ValueError:
