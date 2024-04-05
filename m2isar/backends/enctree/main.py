@@ -126,9 +126,9 @@ def main():
             print("df")
             with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', 1000):
                 print(df)
-            def helper(df, depth=0):
+            def helper(df, depth=1):
                 candidates = list(df.columns[(~df.isna()).all()])[2:]
-                print(depth, "candidates", candidates)
+                # print(depth * "*", "candidates", candidates)
                 if len(candidates) == 0:
                     # TODO
                     candidates = list(df.columns[2:])
@@ -136,13 +136,13 @@ def main():
                         return x[0] - x[1] + 1
                     candidate_sizes = list(map(calc_size, candidates))
                     candidate_sizes = sorted(candidate_sizes, reverse=True)
-                    print("candidate_sizes", candidate_sizes)
+                    # print("candidate_sizes", candidate_sizes)
                     candidates = sorted(candidates, reverse=True, key=calc_size)
-                    print("candidates", candidates)
+                    # print("candidates", candidates)
                     candidates_lo = list(map(lambda x: x[1], candidates))
-                    print("candidates_lo", candidates_lo)
+                    # print("candidates_lo", candidates_lo)
                     candidates_hi = list(map(lambda x: x[0], candidates))
-                    print("candidates_hi", candidates_hi)
+                    # print("candidates_hi", candidates_hi)
                     def calc_mask(x):
                         return (2**(x[0]+1)-1) & ~(2**(x[1])-1)
                     # candidate_masks = list(map(lambda x: (2**(x[0])-1) & ~(2**(x[1])-1), list(df.columns[2:])))
@@ -150,12 +150,12 @@ def main():
                     # print("candadte_masks", candidate_masks)
                     biggest = candidates[0]
                     biggest_size = candidate_sizes[0]
-                    print("biggest_size", biggest_size)
+                    # print("biggest_size", biggest_size)
                     rest = candidates[1:]
                     rest = sorted(rest, key=lambda x: x[1])
-                    print("rest", rest)
+                    # print("rest", rest)
                     rest_sizes = list(map(calc_size, rest))
-                    print("rest_sizes", rest_sizes)
+                    # print("rest_sizes", rest_sizes)
                     first = rest[0]
                     assert first[1] == biggest[1]
                     # rest_lo = candidates_lo[1:]
@@ -163,19 +163,34 @@ def main():
                     # rest_hi = candidates_hi[1:]
                     # print("rest_hi", rest_hi)
                     assert biggest_size == sum(rest_sizes)
-                    print("q", bin(calc_mask(biggest)))
-                    print("w", bin(reduce(lambda x, y: x | y, map(calc_mask, rest))))
+                    # print("q", bin(calc_mask(biggest)))
+                    # print("w", bin(reduce(lambda x, y: x | y, map(calc_mask, rest))))
                     assert calc_mask(biggest) == reduce(lambda x, y: x | y, map(calc_mask, rest))
-                    assert False
+                    # print("df.biggest", df[biggest])
+                    sh = 0
+                    for r in rest:
+                        # print("r", r)
+                        hi, lo = r
+                        # tmp = df[biggest].values.astype(int) & 0x1
+                        tmp = df[biggest].apply(lambda x: x if pd.isna(x) else (int(x) & ((calc_mask(r) >> lo) << sh)))
+                        # print("tmp", tmp)
+                        df[r].fillna(tmp, inplace=True)
+                        sh += (hi - lo + 1)
+                        candidates
+                    df.drop(columns=[biggest], inplace=True)
+                    # print("df", df)
+                    candidates = rest
                 candidate = candidates[0]
                 for group, group_df in df.groupby(candidate, dropna=False):
-                    print(depth, "group", group)
+                    print(depth * "*", candidate, "->", hex(int(group)))
                     group_df.drop(columns=[candidate], inplace=True)
                     group_df.dropna(axis=1, how='all', inplace=True)
                     # print("B", list(group_df.columns[(~group_df.isna()).all()])[2:])
-                    print(depth, "group_df")
-                    print(group_df)
-                    if len(group_df) > 1:
+                    if len(group_df) == 1:
+                        print(depth * "*", "Instr:", group_df.Name.values[0])
+                    elif len(group_df) > 1:
+                        # print(depth * "*", "group_df")
+                        # print(group_df)
                         helper(group_df, depth=depth+1)
             helper(df)
         break
