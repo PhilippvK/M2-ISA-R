@@ -13,9 +13,11 @@ import logging
 import pathlib
 import pickle
 import pandas as pd
+import numpy as np
 from functools import reduce
 from collections import defaultdict
 
+from .utils import RootNode
 from ...metamodel import M2_METAMODEL_VERSION, M2Model, arch, patch_model
 from ...metamodel.utils.expr_preprocessor import (process_attributes,
                                                   process_functions,
@@ -92,12 +94,16 @@ def main():
                 continue
             df = pd.DataFrame()
 
+            root = RootNode(size=size)
+
             # generate instructions
             for (code, mask), instr_def in instrs.items():
                 print("---")
                 opcode_str = "{code:0{width}x}:{mask:0{width}x}".format(code=code, mask=mask, width=int(instr_def.size/4))
                 print("opc", opcode_str)
                 print("name", instr_def.name)
+                if instr_def.name in ["DII", "CNOP", "CLUI"]:
+                    continue
 
                 # generate encoding
                 enc_str = []
@@ -126,7 +132,7 @@ def main():
             print("df")
             with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', 1000):
                 print(df)
-            def helper(df, depth=1):
+            def helper(df, node=None, depth=1):
                 candidates = list(df.columns[(~df.isna()).all()])[2:]
                 # print(depth * "*", "candidates", candidates)
                 if len(candidates) == 0:
@@ -181,18 +187,28 @@ def main():
                     # print("df", df)
                     candidates = rest
                 candidate = candidates[0]
+                if node:
+                    node = node.select(candidate)
                 for group, group_df in df.groupby(candidate, dropna=False):
+                    group = int(group)
                     print(depth * "*", candidate, "->", hex(int(group)))
+                    node_ = None
+                    if node:
+                        node_ = node.choose(group)
                     group_df.drop(columns=[candidate], inplace=True)
                     group_df.dropna(axis=1, how='all', inplace=True)
                     # print("B", list(group_df.columns[(~group_df.isna()).all()])[2:])
                     if len(group_df) == 1:
                         print(depth * "*", "Instr:", group_df.Name.values[0])
+                        if node_:
+                            node_.instruction(group_df.Name.values[0])
                     elif len(group_df) > 1:
-                        # print(depth * "*", "group_df")
-                        # print(group_df)
-                        helper(group_df, depth=depth+1)
-            helper(df)
+                        print(depth * "*", "group_df")
+                        print(group_df)
+                        helper(group_df, node=node_, depth=depth+1)
+            helper(df, node=root)
+            root.render()
+            root.plot_all("/tmp/plotout/")
         break
 
 
