@@ -18,22 +18,24 @@ class LineInfoPlacement(Enum):
 class CodeInfoBase:
 	"""Base class for tracking code info."""
 
-	id: int = field(init=False)
-	"""Automatically calculated unique ID for tracking purposes in consumer programs."""
-
 	file_path: str
 	start_chr: int
 	stop_chr: int
 	start_line_no: int
 	stop_line_no: int
 
+	id: int = field(default=None, kw_only=True)
+	"""Automatically calculated unique ID for tracking purposes in consumer programs."""
+
 	__id_counter = 0
 	database = {}
 	"""A global database of all created CodeInfo objects."""
 
 	def __post_init__(self):
-		self.id = CodeInfoBase.__id_counter
-		CodeInfoBase.__id_counter += 1
+		if self.id is None:
+			self.id = CodeInfoBase.__id_counter
+			CodeInfoBase.__id_counter += 1
+
 		CodeInfoBase.database[self.id] = self
 
 	def line_eq(self, other):
@@ -51,36 +53,38 @@ class CodeInfoBase:
 
 @dataclass(eq=False)
 class LineInfo(CodeInfoBase):
-	placement: LineInfoPlacement = LineInfoPlacement.AFTER
+	placement: LineInfoPlacement = field(default=LineInfoPlacement.AFTER, kw_only=True)
 
 @dataclass(eq=False)
 class FunctionInfo(CodeInfoBase):
 	fn_name: str
 
-class LineInfoFactory:
-	"""Factory class to create non-overlapping LineInfo objects."""
+@dataclass(eq=False)
+class BranchInfo(LineInfo):
+	branch_id: int = field(default=None, kw_only=True)
 
-	tracker = {}
+@dataclass(eq=False)
+class BranchEntryInfo(BranchInfo):
+	placement: LineInfoPlacement = field(default=LineInfoPlacement.BEFORE, init=False)
+	def __post_init__(self):
+		super().__post_init__()
 
-	@classmethod
-	def make(cls, file_path, start_chr, stop_chr, start_line_no, stop_line_no, placement=LineInfoPlacement.AFTER):
-		ret = cls.tracker.get((file_path, start_chr, stop_chr))
+		if self.branch_id is None:
+			self.branch_id = self.id
+
+class InfoFactory:
+	def __init__(self, cls_to_use):
+		self.cls_to_use = cls_to_use
+		self.tracker: "dict[tuple[str, int, int], CodeInfoBase]" = {}
+
+	def make(self, file_path, start_chr, stop_chr, start_line_no, stop_line_no, *args, **kwargs):
+		ret = self.tracker.get((file_path, start_chr, stop_chr))
 		if ret is None:
-			ret = LineInfo(file_path, start_chr, stop_chr, start_line_no, stop_line_no, placement)
-			cls.tracker[(file_path, start_chr, stop_chr)] = ret
+			ret = self.cls_to_use(file_path, start_chr, stop_chr, start_line_no, stop_line_no, *args, **kwargs)
+			self.tracker[((file_path, start_chr, stop_chr))] = ret
 
 		return ret
 
-class FunctionInfoFactory:
-	"""Factory class to create non-overlapping FunctionInfo objects."""
-
-	tracker = {}
-
-	@classmethod
-	def make(cls, file_path, start_chr, stop_chr, start_line_no, stop_line_no, fn_name):
-		ret = cls.tracker.get((file_path, start_chr, stop_chr))
-		if ret is None:
-			ret = FunctionInfo(file_path, start_chr, stop_chr, start_line_no, stop_line_no, fn_name)
-			cls.tracker[(file_path, start_chr, stop_chr)] = ret
-
-		return ret
+LineInfoFactory = InfoFactory(LineInfo)
+FunctionInfoFactory = InfoFactory(FunctionInfo)
+BranchEntryInfoFactory = InfoFactory(BranchEntryInfo)
