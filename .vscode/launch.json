@@ -24,6 +24,7 @@
             "args": [
                 //"--separate",
                 //"--static-scalars",
+                "--coverage",
                 "--log", "info",
                 "${input:inputFile}"
             ],
