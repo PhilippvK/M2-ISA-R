@@ -15,7 +15,7 @@ from collections import defaultdict
 from tqdm import tqdm
 
 from ...metamodel import M2_METAMODEL_VERSION, M2Model, patch_model
-from ...metamodel.code_info import CodeInfoBase, FunctionInfo, LineInfo
+from ...metamodel.code_info import CodeInfoBase, FunctionInfo, LineInfo, BranchInfo
 from ...metamodel.utils.expr_preprocessor import (process_attributes,
                                                   process_functions,
                                                   process_instructions)
@@ -98,21 +98,26 @@ def main():
 
 	logger.info("initializing coverage counters")
 
-	linedata_by_core_and_file = defaultdict(lambda: defaultdict(dict))
-	fndata_by_core_and_file = defaultdict(lambda: defaultdict(dict))
-	fnmeta_by_core_and_file = defaultdict(lambda: defaultdict(dict))
+	line_counts_by_core_and_file: dict[str, dict[str, dict[int, int]]] = defaultdict(lambda: defaultdict(dict))
+	fn_counts_by_core_and_file: dict[str, dict[str, dict[str, int]]] = defaultdict(lambda: defaultdict(dict))
+	fnmeta_by_core_and_file: dict[str, dict[str, dict[str, tuple[int, int]]]] = defaultdict(lambda: defaultdict(dict))
+	branch_counts_by_core_and_file: dict[str, dict[str, dict[int, int]]] = defaultdict(lambda: defaultdict(dict))
+	branchmeta_by_core_and_file: dict[str, dict[str, dict[int, list[BranchInfo]]]] = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
 
 	for core_name, objs in ctx.id_to_obj_map.items():
 		for id, owner in objs.items():
 			codeinfo = model_obj.code_infos[id]
 
 			if isinstance(codeinfo, LineInfo):
-				linedata_by_core_and_file[core_name][codeinfo.file_path][codeinfo.start_line_no] = 0
+				line_counts_by_core_and_file[core_name][codeinfo.file_path][codeinfo.start_line_no] = 0
 
 			elif isinstance(codeinfo, FunctionInfo):
-				fndata_by_core_and_file[core_name][codeinfo.file_path][codeinfo.fn_name] = 0
+				fn_counts_by_core_and_file[core_name][codeinfo.file_path][codeinfo.fn_name] = 0
 				fnmeta_by_core_and_file[core_name][codeinfo.file_path][codeinfo.fn_name] = (codeinfo.start_line_no, codeinfo.stop_line_no)
 
+			if isinstance(codeinfo, BranchInfo):
+				branch_counts_by_core_and_file[core_name][codeinfo.file_path][codeinfo.id] = 0
+				branchmeta_by_core_and_file[core_name][codeinfo.file_path][codeinfo.branch_id].append(codeinfo)
 
 	logger.info("generating coverage")
 
@@ -150,6 +155,9 @@ def main():
 		linedata_of_this_file = defaultdict(dict)
 
 		for lineinfo, count in linedata.items():
+			if isinstance(lineinfo, BranchInfo):
+				branch_counts_by_core_and_file[core_name][lineinfo.file_path][lineinfo.id] += count
+
 			if isinstance(lineinfo, LineInfo):
 				if already_checked(checked_lineinfo, lineinfo, count):
 					continue
@@ -164,21 +172,48 @@ def main():
 
 				checked_fninfo[lineinfo] = count
 
-				fndata_by_core_and_file[core_name][lineinfo.file_path][lineinfo.fn_name] += count
+				fn_counts_by_core_and_file[core_name][lineinfo.file_path][lineinfo.fn_name] += count
 
 		for filepath, lines in linedata_of_this_file.items():
 			for line_no, line_count in lines.items():
-				linedata_by_core_and_file[core_name][filepath][line_no] += line_count
+				line_counts_by_core_and_file[core_name][filepath][line_no] += line_count
 
 	logger.info("writing output")
-	for core_name, linedata_by_file in linedata_by_core_and_file.items():
+	for core_name, linedata_by_file in line_counts_by_core_and_file.items():
 		with open(f"{core_name}.{args.outfile}", 'w') as f:
 			for filepath, lines in linedata_by_file.items():
 				f.write("TN:\n")
 				f.write(f"SF:{filepath}\n")
 
+				branch_hit_counter = 0
 				line_hit_counter = 0
 				fn_hit_counter = 0
+
+				for branch_id, branch_infos in branchmeta_by_core_and_file[core_name][filepath].items():
+					total_count = branch_counts_by_core_and_file[core_name][filepath][branch_infos[0].id]
+					taken_counts = [branch_counts_by_core_and_file[core_name][filepath][x.id] for x in branch_infos[1:]]
+
+					remaining_count = total_count
+
+					branch_data = []
+
+					for count, branch_info in zip(taken_counts, branch_infos[1:]):
+						# line no, taken, not taken
+						d = (branch_info.start_line_no, count, remaining_count - count)
+
+						branch_hit_counter += count > 0 + (remaining_count - count) > 0
+
+						f.write(f"BRDA:{branch_info.start_line_no},0,0,{count if remaining_count > 0 else '-'}\n")
+						f.write(f"BRDA:{branch_info.start_line_no},0,1,{remaining_count - count if remaining_count > 0 else '-'}\n")
+
+						lines[branch_info.start_line_no] = remaining_count
+
+						branch_data.append(d)
+						remaining_count -= count
+
+
+				f.write(f"BRF:{len(branchmeta_by_core_and_file[core_name][filepath])}\n")
+				f.write(f"BRH:{branch_hit_counter}\n")
 
 				for line_no, line_count in sorted(lines.items()):
 					f.write(f"DA:{line_no},{line_count}\n")
@@ -195,7 +230,7 @@ def main():
 					else:
 						f.write(f"FN:{fn_start},{fn_stop},{fn_name}\n")
 
-				for fn_name, fn_count in fndata_by_core_and_file[core_name][filepath].items():
+				for fn_name, fn_count in fn_counts_by_core_and_file[core_name][filepath].items():
 					f.write(f"FNDA:{fn_count},{fn_name}\n")
 
 					if fn_count > 0:
