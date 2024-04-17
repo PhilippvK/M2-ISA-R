@@ -39,11 +39,12 @@ class CodeInfoBase:
 		CodeInfoBase.database[self.id] = self
 
 	def line_eq(self, other):
-		if isinstance(other, self.__class__):
+		if isinstance(other, self.__class__) or isinstance(self, other.__class__):
 			return self.file_path == other.file_path and \
 				self.start_line_no == other.start_line_no #and \
 				#self.stop_line_no == other.stop_line_no
-		return NotImplemented
+
+		raise NotImplementedError
 
 	def __hash__(self) -> int:
 		return hash(self.id)
