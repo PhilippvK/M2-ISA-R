@@ -8,14 +8,17 @@
 
 import argparse
 import logging
+import os
 import pathlib
 import pickle
 from collections import defaultdict
+from functools import partial
 
-from tqdm import tqdm
+from tqdm.contrib.concurrent import process_map
 
 from ...metamodel import M2_METAMODEL_VERSION, M2Model, patch_model
-from ...metamodel.code_info import CodeInfoBase, FunctionInfo, LineInfo, BranchInfo
+from ...metamodel.code_info import (BranchInfo, CodeInfoBase, FunctionInfo,
+                                    LineInfo)
 from ...metamodel.utils.expr_preprocessor import (process_attributes,
                                                   process_functions,
                                                   process_instructions)
@@ -23,6 +26,62 @@ from . import id_transform
 from .utils import IdMatcherContext
 
 logger = logging.getLogger("coverage_lcov")
+
+def generate_coverage(line_data_fname: "pathlib.Path", code_infos: "dict[int, CodeInfoBase]", line_counts_by_core_and_file, fn_counts_by_core_and_file, branch_counts_by_core_and_file):
+	line_data_path = pathlib.Path(line_data_fname)
+	logger.debug("processing file %s", line_data_path.name)
+	logger.debug("reading line data")
+
+	linedata: "dict[CodeInfoBase, int]" = {}
+	with open(line_data_path, 'r') as f:
+		core_name = f.readline().strip()
+		f.readline()
+		for line in f:
+			l_id, count = line.strip().split(";")
+			linedata[code_infos[int(l_id)]] = int(count)
+
+	checked_lineinfo = {}
+	checked_fninfo = {}
+
+	def already_checked(to_check, l: LineInfo, count):
+		for l2, count2 in to_check.items():
+			if l.line_eq(l2):
+				if count > count2:
+					return False
+				elif count < count2:
+					return True
+				else:
+					return True
+
+		return False
+
+	linedata_of_this_file = defaultdict(dict)
+
+	for lineinfo, count in linedata.items():
+		if isinstance(lineinfo, BranchInfo):
+			branch_counts_by_core_and_file[core_name][lineinfo.file_path][lineinfo.id] += count
+
+		if isinstance(lineinfo, LineInfo):
+			if already_checked(checked_lineinfo, lineinfo, count):
+				continue
+
+			checked_lineinfo[lineinfo] = count
+
+			linedata_of_this_file[lineinfo.file_path][lineinfo.start_line_no] = count
+
+		elif isinstance(lineinfo, FunctionInfo):
+			if already_checked(checked_fninfo, lineinfo, count):
+				continue
+
+			checked_fninfo[lineinfo] = count
+
+			fn_counts_by_core_and_file[core_name][lineinfo.file_path][lineinfo.fn_name] += count
+
+	for filepath, lines in linedata_of_this_file.items():
+		for line_no, line_count in lines.items():
+			line_counts_by_core_and_file[core_name][filepath][line_no] += line_count
+
+	return line_counts_by_core_and_file, fn_counts_by_core_and_file, branch_counts_by_core_and_file
 
 def main():
 	"""Main app entrypoint."""
@@ -35,6 +94,7 @@ def main():
 	parser.add_argument("--legacy", action="store_true", help="Generate data for LOCV version < 2.0")
 	parser.add_argument("-o", "--outfile", required=True)
 	parser.add_argument("-a", "--target-arch", action="append")
+	parser.add_argument("-j", "--parallel", type=int, default=os.cpu_count())
 	args = parser.parse_args()
 
 	# initialize logging
@@ -119,64 +179,33 @@ def main():
 				branch_counts_by_core_and_file[core_name][codeinfo.file_path][codeinfo.id] = 0
 				branchmeta_by_core_and_file[core_name][codeinfo.file_path][codeinfo.branch_id].append(codeinfo)
 
+	def dictconv(d: dict):
+		ret = dict(d)
+
+		for k, v in ret.items():
+			if isinstance(v, dict):
+				ret[k] = dictconv(v)
+
+		return ret
+
+	line_counts_by_core_and_file = dictconv(line_counts_by_core_and_file)
+	fn_counts_by_core_and_file = dictconv(fn_counts_by_core_and_file)
+	branch_counts_by_core_and_file = dictconv(branch_counts_by_core_and_file)
+
 	logger.info("generating coverage")
 
-	for line_data_fname in tqdm(args.line_data):
-		line_data_path = pathlib.Path(line_data_fname)
+	out = process_map(partial(generate_coverage, code_infos=model_obj.code_infos, line_counts_by_core_and_file=line_counts_by_core_and_file, fn_counts_by_core_and_file=fn_counts_by_core_and_file, branch_counts_by_core_and_file=branch_counts_by_core_and_file), args.line_data, max_workers=args.parallel)
 
-		logger.debug("processing file %s", line_data_path.name)
+	def update(d: dict[str, dict[str, dict[int, int]]], u: dict[str, dict[str, dict[int, int]]]):
+		for core_name, data in u.items():
+			for filepath, lines in data.items():
+				for line_no, line_count in lines.items():
+					d[core_name][filepath][line_no] += line_count
 
-
-		logger.debug("reading line data")
-
-		linedata: "dict[CodeInfoBase, int]" = {}
-		with open(line_data_path, 'r') as f:
-			core_name = f.readline().strip()
-			f.readline()
-			for line in f:
-				l_id, count = line.strip().split(";")
-				linedata[model_obj.code_infos[int(l_id)]] = int(count)
-
-		checked_lineinfo = {}
-		checked_fninfo = {}
-
-		def already_checked(to_check, l: LineInfo, count):
-			for l2, count2 in to_check.items():
-				if l.line_eq(l2):
-					if count > count2:
-						return False
-					elif count < count2:
-						return True
-					else:
-						return True
-
-			return False
-
-		linedata_of_this_file = defaultdict(dict)
-
-		for lineinfo, count in linedata.items():
-			if isinstance(lineinfo, BranchInfo):
-				branch_counts_by_core_and_file[core_name][lineinfo.file_path][lineinfo.id] += count
-
-			if isinstance(lineinfo, LineInfo):
-				if already_checked(checked_lineinfo, lineinfo, count):
-					continue
-
-				checked_lineinfo[lineinfo] = count
-
-				linedata_of_this_file[lineinfo.file_path][lineinfo.start_line_no] = count
-
-			elif isinstance(lineinfo, FunctionInfo):
-				if already_checked(checked_fninfo, lineinfo, count):
-					continue
-
-				checked_fninfo[lineinfo] = count
-
-				fn_counts_by_core_and_file[core_name][lineinfo.file_path][lineinfo.fn_name] += count
-
-		for filepath, lines in linedata_of_this_file.items():
-			for line_no, line_count in lines.items():
-				line_counts_by_core_and_file[core_name][filepath][line_no] += line_count
+	for ret_line_data, ret_fn_data, ret_branch_data in out:
+		update(line_counts_by_core_and_file, ret_line_data)
+		update(fn_counts_by_core_and_file, ret_fn_data)
+		update(branch_counts_by_core_and_file, ret_branch_data)
 
 	logger.info("writing output")
 	for core_name, linedata_by_file in line_counts_by_core_and_file.items():
