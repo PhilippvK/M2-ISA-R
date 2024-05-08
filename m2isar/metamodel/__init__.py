@@ -30,6 +30,7 @@ the hierarchy.
 
 import inspect
 import logging
+from typing import Dict
 from dataclasses import dataclass
 
 from . import arch, behav, code_info
@@ -78,12 +79,12 @@ intrinsics = {x.name: x for x in intrinsic_defs}
 @dataclass
 class M2Model:
 	model_version: int
-	models: dict[str, arch.CoreDef]
-	code_infos: dict[int, code_info.CodeInfoBase]
+	models: Dict[str, arch.CoreDef]
+	code_infos: Dict[int, code_info.CodeInfoBase]
 
 	def __post_init__(self):
-		self.line_infos: dict[int, code_info.LineInfo] = {}
-		self.function_infos: dict[int, code_info.FunctionInfo] = {}
+		self.line_infos: Dict[int, code_info.LineInfo] = {}
+		self.function_infos: Dict[int, code_info.FunctionInfo] = {}
 
 		for idx, c in self.code_infos.items():
 			if isinstance(c, code_info.LineInfo):
