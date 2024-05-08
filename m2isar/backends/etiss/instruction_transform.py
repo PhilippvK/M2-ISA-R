@@ -129,7 +129,7 @@ def operation(self: behav.Operation, context: TransformerContext):
 			return_conditions.clear()
 
 		if return_needed:
-			cond_str = ("if (" + " | ".join(return_conditions) + ") ") if return_conditions else ""
+			cond_str = ("if (" + " || ".join(return_conditions) + ") ") if return_conditions else ""
 			container.appended_returning_required = f'cp.code() += "{cond_str}return cpu->exception;\\n";'
 
 	elif arch.FunctionAttribute.ETISS_TRAP_ENTRY_FN in context.attributes:
