@@ -11,7 +11,7 @@ def plot_space(outpath, data_all):
     HEIGHT = 0.2
 
     for i, data_ in enumerate(data_all):
-        bits, data = data_
+        bits, field_str, data = data_
         print("i", i)
         print("data", data)
 
@@ -44,7 +44,7 @@ def plot_space(outpath, data_all):
             rh = active_rect.get_height()
             ax.plot([rx, 0], [ry+rh, SHIFT * (i + 1)], color="gray")
             ax.plot([rx+rw, 100], [ry+rh, SHIFT * (i + 1)], color="gray")
-        ax.text(-100/40, HEIGHT / 2 + SHIFT * i, f"{bits}-bit",
+        ax.text(-100/40, HEIGHT / 2 + SHIFT * i, f"{bits}-bit\n{field_str}",
                     ha="center", va="center", rotation=90, size=7)
 
         ### x = 0
