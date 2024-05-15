@@ -5,7 +5,7 @@ from pathlib import Path
 from .plot import plot_space
 
 class EncodingNode:
-  def __init__(self, mask: Optional[int] = None, match: Optional[int] = None, selected: Optional[int] = None, size: Optional[int] = None, parent = None):
+  def __init__(self, mask: Optional[int] = None, match: Optional[int] = None, selected: Optional[Tuple[int, int]] = None, size: Optional[int] = None, parent = None):
     self._size = size
     self._mask = mask
     self._match = match
@@ -13,9 +13,10 @@ class EncodingNode:
     self.parent = parent
     self.children = []
     self.is_instruction = False
+    self.mappings = {}
 
   def __repr__(self):
-  	return self.bitstr
+    return self.bitstr
 
   @property
   def num_instrs(self):
@@ -23,7 +24,7 @@ class EncodingNode:
 
   @property
   def is_selection(self):
-      return self.selected > 0
+      return self.selected_bits > 0
 
   def to_tree(self, parent=None):
     x = Node(str(self), parent=parent, ref=self)
@@ -151,7 +152,7 @@ class EncodingNode:
 
   @property
   def selectedstr(self):
-    return f"{self.selected:b}".zfill(self.size)
+    return f"{self.selected_mask:b}".zfill(self.size)
 
   @property
   def fixed_bits(self):
@@ -163,7 +164,9 @@ class EncodingNode:
 
   @property
   def selected_bits(self):
-    return self.selectedstr.count("1")
+    if self.selected:
+      return self.selected[0] - self.selected[1] + 1
+    return 0
 
   @property
   def space_size(self):
@@ -201,10 +204,24 @@ class EncodingNode:
   def selected(self):
     if self._selected is not None:
       return self._selected
-    if self.parent:
-      assert self.parent.selected is not None
-      return self.parent.selected
-    assert False
+    # if self.parent:
+    #   assert self.parent.selected is not None
+    #   return self.parent.selected
+    # assert False
+    return None
+
+  @property
+  def selected_mask(self):
+    if self.selected_bits == 0:
+      return 0
+    field = self.selected
+    upper, lower = field
+    assert upper >= lower
+    length = upper - lower + 1
+    temp = (2**length)-1
+    temp <<= lower
+    assert temp & self.mask == 0
+    return temp
 
   @property
   def size(self):
@@ -216,44 +233,38 @@ class EncodingNode:
     assert False
 
   def select(self, field: Tuple[int, int]):
-  	assert self.selected == 0
-  	assert len(field) == 2
-  	upper, lower = field
-  	assert upper >= lower
-  	length = upper - lower + 1
-  	temp = (2**length)-1
-  	temp <<= lower
-  	assert temp & self.mask == 0
-  	new = EncodingNode(mask=self.mask, match=self.match, selected=temp, size=self.size, parent=self)
-  	self.children.append(new)
-  	return new
+    assert self.selected_bits == 0
+    assert len(field) == 2
+    new = EncodingNode(mask=self.mask, match=self.match, selected=field, size=self.size, parent=self)
+    new.mapping = {**self.mappings}
+    self.children.append(new)
+    return new
 
   def choose(self, value: int):
-  	assert self.selected > 0
-  	upper = self.selectedstr[::-1].rfind("1")
-  	lower = self.selectedstr[::-1].find("1")
-  	assert upper > lower
-  	length = upper - lower + 1
-  	assert value < (2**length)
-  	temp = value << lower
-  	new = EncodingNode(mask=self.mask | self.selected, match=self.match | temp, selected=0, size=self.size, parent=self)
-  	self.children.append(new)
-  	return new
+    _, lower = self.selected
+    length = self.selected_bits
+    assert length > 0
+    assert value < (2**length)
+    temp = value << lower
+    new = EncodingNode(mask=self.mask | self.selected_mask, match=self.match | temp, selected=None, size=self.size, parent=self)
+    new.mappings = {**self.mappings, self.selected: value}
+    self.children.append(new)
+    return new
 
   def instruction(self, name: str):
-  	assert self.selected == 0
-  	new = InstructionNode(name, mask=self.mask, match=self.match, size=self.size, parent=self)
-  	self.children.append(new)
-  	return new
+    assert self.selected_bits == 0
+    new = InstructionNode(name, mask=self.mask, match=self.match, size=self.size, parent=self)
+    self.children.append(new)
+    return new
 
 
 class RootNode(EncodingNode):
   def __init__(self, size: int):
-    super().__init__(size=size, mask=0, match=0, selected=0, parent=None)
+    super().__init__(size=size, mask=0, match=0, selected=None, parent=None)
 
 class InstructionNode(EncodingNode):
   def __init__(self, name: str, mask: int, match: int, size: Optional[int] = None, parent: Optional[EncodingNode] = None):
-    super().__init__(size=size, mask=mask, match=match, selected=0, parent=parent)
+    super().__init__(size=size, mask=mask, match=match, selected=None, parent=parent)
     self.name = name
     self.is_instruction = True
 
