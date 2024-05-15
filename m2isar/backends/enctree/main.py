@@ -129,6 +129,15 @@ def main():
                 print("vals", vals)
                 df = pd.concat([df, pd.DataFrame({"Name": [instr_def.name], **{k: [v] for k, v in vals.items()}})], axis=0)
             df.reset_index(inplace=True)
+            split_opcode = True
+            if split_opcode:
+                assert (6, 0) in df.columns
+                print("!", df[(6, 0)].isna())
+                assert not any(df[(6, 0)].isna())
+                df[(1, 0)] = np.bitwise_and(df[(6, 0)], 0b11)
+                df[(6, 2)] = np.right_shift(np.bitwise_and(df[(6, 0)], 0b1111100), 2)
+                del df[(6, 0)]
+            # TODO: allow renaming fields, size, opcode, func3, func7
             print("df")
             with pd.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', 1000):
                 print(df)
