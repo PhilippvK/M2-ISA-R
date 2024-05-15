@@ -4,6 +4,27 @@ from pathlib import Path
 
 from .plot import plot_space
 
+
+# class VisitorContext:
+#
+#   def __init__(self):
+#       self.data = {}
+#       self.stack = []
+#
+#   def visit(self, node):
+#       print("visit", node)
+#       if node.is_selection:
+#           # selected = node.selected
+#           # self.selected = selected
+#           pass
+#       elif node.is_instruction:
+#           pass
+#       else:
+#           if self.selected:
+#               val = (node.match & node.parent.selected_mask) >> node.parent.selected[1]
+#       for c in node.children:
+#           self.visit(c)
+
 class EncodingNode:
   def __init__(self, mask: Optional[int] = None, match: Optional[int] = None, selected: Optional[Tuple[int, int]] = None, size: Optional[int] = None, parent = None):
     self._size = size
@@ -81,70 +102,99 @@ class EncodingNode:
 
   # def plot_all(self, outpath, fmt="png"):
   def plot_all(self, outpath, fmt="pdf"):
+    pass
     # TODO: traverse only (no render)
-    for pre, fill, node in RenderTree(self.to_tree()):
-      ref = node.ref
-      if ref.is_instruction:
-          print("skip")
-          continue
-      if not ref.is_selection:
-          print("skip2")
-          continue
-      fname = Path(outpath) / f"{node.name}.{fmt}"
-      print("fname", fname)
-      plot_data = [
-        (32, [
-            (25, 0, "0b00\n(compressed-0)", False),
-            (25, 0, "0b01\n(compressed-1)", False),
-            (25, 0, "0b10\n(compressed-2)", False),
-            (25, 12.5, "11\n(uncompressed)", True)
-        ]),
-        (30, [
-            (3.125, 1.953125, "0x00\n(LOAD)", True),
-            (3.125, 0, "0x01\n(LOAD-FP)", False),
-            (3.125, 0, "0x02\n(custom-0)", False),
-            (3.125, 0.390625, "0x03\n(MISC-MEM)", False),
-            (3.125, 0, "0x04\n(OP-IMM)", False),
-            (3.125, 0, "0x05\n(AUIPC)", False),
-            (3.125, 0, "0x06\n(OP-IMM-32)", False),
-            (3.125, 0, "0x07\n(48b)", False),
-            (3.125, 0, "0x08\n(STORE)", False),
-            (3.125, 0, "0x09\n(STORE-FP)", False),
-            (3.125, 0, "0x0a\n(custom-1)", False),
-            (3.125, 0, "0x0b\n(AMO)", False),
-            (3.125, 0, "0x0c\n(OP)", False),
-            (3.125, 0, "0x0d\n(LUI)", False),
-            (3.125, 0, "0x0e\n(OP-32)", False),
-            (3.125, 0, "0x0f\n(64b)", False),
-            (3.125, 0, "0x10\n(MADD)", False),
-            (3.125, 0, "0x11\n(MSUB)", False),
-            (3.125, 0, "0x12\n(NMSUB)", False),
-            (3.125, 0, "0x13\n(NMADD)", False),
-            (3.125, 0, "0x14\n(OP-FP)", False),
-            (3.125, 0, "0x15\n(OP-V)", False),
-            (3.125, 0, "0x16\n(custom-2)", False),
-            (3.125, 0, "0x17\n(48b)", False),
-            (3.125, 0, "0x18\n(BRANCH)", False),
-            (3.125, 0, "0x19\n(JALR)", False),
-            (3.125, 0, "0x1a\n(reserved)", False),
-            (3.125, 0, "0x1b\n(JAL)", False),
-            (3.125, 0, "0x1c\n(SYSTEM)", False),
-            (3.125, 0, "0x1d\n(reserved)", False),
-            (3.125, 0, "0x1e\n(custom-3)", False),
-            (3.125, 0, "0x1f\n(>=80b)", False),
-        ]),
-        (27, [
-            (12.5, 12.5, "0b000\n(lb)", False),
-            (12.5, 12.5, "0b001\n(lh)", False),
-            (12.5, 12.5, "0b010\n(lw)", False),
-            (12.5, 0, "0b011", False),
-            (12.5, 12.5, "0b100\n(lbu)", False),
-            (12.5, 12.5, "0b101\n(lhu)", False),
-            (12.5, 0, "0b110", False),
-            (12.5, 0, "0b111", False),
-        ]),
-      ]
-      plot_space(fname, plot_data)
+    # visitor = VisitorContext()
+    # visitor.visit(self)
+    # plot_data_map = visitor.data
+    # print("plot_data_map", plot_data_map)
+    # for pre, fill, node in RenderTree(self.to_tree()):
+    #   ref = node.ref
+    #   if ref.is_instruction:
+    #       print("skip")
+    #       continue
+    #   if not ref.is_selection:
+    #       print("skip2")
+    #       continue
+    #   fname = Path(outpath) / f"{node.name}.{fmt}"
+    #   print("fname", fname)
+    #   plot_data = []
+    #   assert len(ref.children) > 0
+    #   bits = ref.variable_bits
+    #   print("bits", bits)
+    #   field = ref.selected
+    #   print("field", field)
+    #   field_str = f"{field[0]}:{field[1]}"
+    #   print("field_str", field_str)
+    #   num = 2**(ref.selected_bits)
+    #   print("num")
+    #   values = list(range(num))
+    #   print("values", values)
+    #   values_str = [hex(x) for x in values]
+    #   print("values_str", values_str)
+    #   used_values = [((c.match & ref.selected_mask) >> field[1]) for c in ref.children]
+    #   print("used_values", used_values)
+    #   is_instrs = [c.is_instruction for c in ref.children]
+    #   print("is_instrs", is_instrs)
+    #   mappings = ref.mappings
+    #   print("mappings", mappings)
+    #   tmp = []
+    #   # tmp = ref.parent
+    #   # while tmp is not None:
+    #   # plot_data = [
+    #   #   (32, "1:0", [
+    #   #       (25, 0, "0b00\n(compressed-0)", False),
+    #   #       (25, 0, "0b01\n(compressed-1)", False),
+    #   #       (25, 0, "0b10\n(compressed-2)", False),
+    #   #       (25, 12.5, "11\n(uncompressed)", True)
+    #   #   ]),
+    #   #   (30, "6:2", [
+    #   #       (3.125, 1.953125, "0x00\n(LOAD)", True),
+    #   #       (3.125, 0, "0x01\n(LOAD-FP)", False),
+    #   #       (3.125, 0, "0x02\n(custom-0)", False),
+    #   #       (3.125, 0.390625, "0x03\n(MISC-MEM)", False),
+    #   #       (3.125, 0, "0x04\n(OP-IMM)", False),
+    #   #       (3.125, 0, "0x05\n(AUIPC)", False),
+    #   #       (3.125, 0, "0x06\n(OP-IMM-32)", False),
+    #   #       (3.125, 0, "0x07\n(48b)", False),
+    #   #       (3.125, 0, "0x08\n(STORE)", False),
+    #   #       (3.125, 0, "0x09\n(STORE-FP)", False),
+    #   #       (3.125, 0, "0x0a\n(custom-1)", False),
+    #   #       (3.125, 0, "0x0b\n(AMO)", False),
+    #   #       (3.125, 0, "0x0c\n(OP)", False),
+    #   #       (3.125, 0, "0x0d\n(LUI)", False),
+    #   #       (3.125, 0, "0x0e\n(OP-32)", False),
+    #   #       (3.125, 0, "0x0f\n(64b)", False),
+    #   #       (3.125, 0, "0x10\n(MADD)", False),
+    #   #       (3.125, 0, "0x11\n(MSUB)", False),
+    #   #       (3.125, 0, "0x12\n(NMSUB)", False),
+    #   #       (3.125, 0, "0x13\n(NMADD)", False),
+    #   #       (3.125, 0, "0x14\n(OP-FP)", False),
+    #   #       (3.125, 0, "0x15\n(OP-V)", False),
+    #   #       (3.125, 0, "0x16\n(custom-2)", False),
+    #   #       (3.125, 0, "0x17\n(48b)", False),
+    #   #       (3.125, 0, "0x18\n(BRANCH)", False),
+    #   #       (3.125, 0, "0x19\n(JALR)", False),
+    #   #       (3.125, 0, "0x1a\n(reserved)", False),
+    #   #       (3.125, 0, "0x1b\n(JAL)", False),
+    #   #       (3.125, 0, "0x1c\n(SYSTEM)", False),
+    #   #       (3.125, 0, "0x1d\n(reserved)", False),
+    #   #       (3.125, 0, "0x1e\n(custom-3)", False),
+    #   #       (3.125, 0, "0x1f\n(>=80b)", False),
+    #   #   ]),
+    #   #   (27, "15:12", [
+    #   #       (12.5, 12.5, "0b000\n(lb)", False),
+    #   #       (12.5, 12.5, "0b001\n(lh)", False),
+    #   #       (12.5, 12.5, "0b010\n(lw)", False),
+    #   #       (12.5, 0, "0b011", False),
+    #   #       (12.5, 12.5, "0b100\n(lbu)", False),
+    #   #       (12.5, 12.5, "0b101\n(lhu)", False),
+    #   #       (12.5, 0, "0b110", False),
+    #   #       (12.5, 0, "0b111", False),
+    #   #   ]),
+    #   # ]
+    #   plot_space(fname, plot_data)
+    #   input("123")
 
   @property
   def maskstr(self):
