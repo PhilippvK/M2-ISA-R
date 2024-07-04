@@ -442,6 +442,13 @@ class Instruction(SizedRefOrConst):
 		super().__init__(name, 0)
 
 		for e in reversed(self.encoding):
+			print("e", e)
+			if e is None:
+				self._size = None
+				self.mask = None
+				self.code = None
+				print("break")
+				break
 			if isinstance(e, BitField):
 				self._size += e.range.length
 
@@ -460,8 +467,15 @@ class Instruction(SizedRefOrConst):
 
 				self._size += e.length
 
+	@property
+	def has_encoding(self):
+		return self.mask is not None
+
 	def __str__(self) -> str:
-		code_and_mask = f'code={self.code:#0{self.size+2}x}, mask={self.mask:#0{self.size+2}x}'
+		if self.has_encoding:
+			code_and_mask = f'code={self.code:#0{self.size+2}x}, mask={self.mask:#0{self.size+2}x}'
+		else:
+			code_and_mask = "code=?, mask=?"
 		return f'{super().__str__()}, ext_name={self.ext_name}, {code_and_mask}'
 
 class Function(SizedRefOrConst):
@@ -546,13 +560,14 @@ class InstructionSet(Named):
 	"""
 
 	def __init__(self, name, extension: "list[str]", constants: "dict[str, Constant]", memories: "dict[str, Memory]",
-			functions: "dict[str, Function]", instructions: "dict[tuple[int, int], Instruction]"):
+			functions: "dict[str, Function]", instructions: "dict[tuple[int, int], Instruction]", unencoded_instructions: "dict[str, Instruction]"):
 
 		self.extension = extension
 		self.constants = constants
 		self.memories, self.memory_aliases = extract_memory_alias(memories.values())
 		self.functions = functions
 		self.instructions = instructions
+		self.unencoded_instructions = unencoded_instructions
 
 		super().__init__(name)
 
@@ -560,7 +575,7 @@ class CoreDef(Named):
 	"""A class representing an entire CPU core. Contains the collected attributes of multiple InstructionSets."""
 
 	def __init__(self, name, contributing_types: "list[str]", template: str, constants: "dict[str, Constant]", memories: "dict[str, Memory]",
-			memory_aliases: "dict[str, Memory]", functions: "dict[str, Function]", instructions: "dict[tuple[int, int], Instruction]",
+			memory_aliases: "dict[str, Memory]", functions: "dict[str, Function]", instructions: "dict[tuple[int, int], Instruction]", unencoded_instructions: "dict[str, Instruction]",
 			instr_classes: "set[int]", intrinsics: "dict[str, Intrinsic]"):
 
 		self.contributing_types = contributing_types
@@ -570,6 +585,7 @@ class CoreDef(Named):
 		self.memory_aliases = memory_aliases
 		self.functions = functions
 		self.instructions = instructions
+		self.unencoded_instructions = unencoded_instructions
 		self.instr_classes = instr_classes
 		self.main_reg_file = None
 		self.main_memory = None
