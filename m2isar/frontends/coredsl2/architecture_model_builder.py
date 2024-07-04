@@ -25,6 +25,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 
 	_constants: "dict[str, arch.Constant]"
 	_instructions: "dict[str, arch.Instruction]"
+	_unencoded_instructions: "dict[str, arch.Instruction]"
 	_functions: "dict[str, arch.Function]"
 	_always_blocks: "dict[str, arch.AlwaysBlock]"
 	_instruction_sets: "dict[str, arch.InstructionSet]"
@@ -39,6 +40,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 		super().__init__()
 		self._constants = {}
 		self._instructions = {}
+		self._unencoded_instructions = {}
 		self._functions = {}
 		self._always_blocks = {}
 		self._instruction_sets = {}
@@ -85,6 +87,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 		memories = {}
 		functions = {}
 		instructions = {}
+		unencoded_instructions = {}
 
 		# group contents by type
 		for item in contents:
@@ -96,7 +99,10 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 				functions[item.name] = item
 				item.ext_name = name
 			elif isinstance(item, arch.Instruction):
-				instructions[(item.code, item.mask)] = item
+				if item.has_encoding:
+					instructions[(item.code, item.mask)] = item
+				else:
+					unencoded_instructions[item.name] = item
 				item.ext_name = name
 			elif isinstance(item, arch.AlwaysBlock):
 				pass
@@ -104,7 +110,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 				raise M2ValueError("unexpected item encountered")
 
 		# instantiate M2-ISA-R object
-		i = arch.InstructionSet(name, extension, constants, memories, functions, instructions)
+		i = arch.InstructionSet(name, extension, constants, memories, functions, instructions, unencoded_instructions)
 
 		if name in self._instruction_sets:
 			raise M2DuplicateError(f"instruction set \"{name}\" already defined")
@@ -133,7 +139,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 
 		c = arch.CoreDef(name, list(self._read_types.keys()), None,
 			self._constants, self._memories, self._memory_aliases,
-			self._functions, self._instructions, self._instr_classes,
+			self._functions, self._instructions, self._unencoded_instructions, self._instr_classes,
 			intrinsics)
 
 		return c
@@ -162,27 +168,38 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 
 	def visitInstruction(self, ctx: CoreDSL2Parser.InstructionContext):
 		"""Generate non-behavioral parts of an instruction."""
+		print("visitInstruction")
 
 		# read encoding, attributes and disassembly
 		encoding = [self.visit(obj) for obj in ctx.encoding]
+		print("encoding", encoding)
+		operands = [self.visit(obj) for obj in ctx.operands]
+		if operands:
+			print("operands", operands)
+			input("q")
 		attributes = dict([self.visit(obj) for obj in ctx.attributes])
 		assembly = ctx.assembly.text.replace("\"", "") if ctx.assembly is not None else None
 		mnemonic = ctx.mnemonic.text.replace("\"", "") if ctx.mnemonic is not None else None
+		name = ctx.name.text
 
-		i = arch.Instruction(ctx.name.text, attributes, encoding, mnemonic, assembly, ctx.behavior, None)
-		self._instr_classes.add(i.size)
+		i = arch.Instruction(name, attributes, encoding, mnemonic, assembly, ctx.behavior, None)
+		if i.has_encoding:
+			self._instr_classes.add(i.size)
+			instr_id = (i.code, i.mask)
 
-		instr_id = (i.code, i.mask)
+			opcode_str = "{code:0{width}x}:{mask:0{width}x}".format(code=i.code, mask=i.mask, width=i.size//4)
+			i.function_info = FunctionInfoFactory.make(ctx.start.source[1].fileName, ctx.start.start, ctx.stop.stop, ctx.start.line, ctx.stop.line, f"instr_{i.name}_{opcode_str}")
 
-		opcode_str = "{code:0{width}x}:{mask:0{width}x}".format(code=i.code, mask=i.mask, width=i.size//4)
-		i.function_info = FunctionInfoFactory.make(ctx.start.source[1].fileName, ctx.start.start, ctx.stop.stop, ctx.start.line, ctx.stop.line, f"instr_{i.name}_{opcode_str}")
+			# check for duplicate instructions
+			if instr_id in self._instructions:
+				self._overwritten_instrs.append((self._instructions[instr_id], i))
 
-		# check for duplicate instructions
-		if instr_id in self._instructions:
-			self._overwritten_instrs.append((self._instructions[instr_id], i))
-
-		# keep track of instruction
-		self._instructions[instr_id] = i
+			# keep track of instruction
+			self._instructions[instr_id] = i
+		else:
+			print("!", self._unencoded_instructions)
+			assert name not in self._unencoded_instructions
+			self._unencoded_instructions[name] = i
 
 		return i
 

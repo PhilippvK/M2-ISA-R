@@ -201,7 +201,7 @@ def main():
 
 		logger.debug("generating instruction behavior")
 
-		for instr_def in core_def.instructions.values():
+		for instr_def in list(core_def.instructions.values()) + list(core_def.unencoded_instructions.values()):
 			logger.debug("generating instruction %s", instr_def.name)
 			logger.debug("generating attributes")
 
