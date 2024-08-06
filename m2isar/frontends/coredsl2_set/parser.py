@@ -23,20 +23,10 @@ from .load_order import LoadOrder
 from .utils import make_parser
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("top_level", help="The CoreDSL file.")
-    parser.add_argument("--log", default="info", choices=["critical", "error", "warning", "info", "debug"])
-    parser.add_argument("--output", "-o", type=str, default=None)
+logger = logging.getLogger("set_parser")
 
-    args = parser.parse_args()
 
-    # app_dir = pathlib.Path(__file__).parent.resolve()
-
-    logging.basicConfig(level=getattr(logging, args.log.upper()))
-    logger = logging.getLogger("parser")
-
-    top_level = pathlib.Path(args.top_level)
+def parse_cdsl2_set(top_level: pathlib.Path):
     abs_top_level = top_level.resolve()
     search_path = abs_top_level.parent
 
@@ -59,12 +49,6 @@ def main():
     except M2Error as e:
         logger.critical("Error during load order building: %s", e)
         sys.exit(1)
-
-    if args.output is None:
-        model_path = search_path.joinpath("gen_model")
-    else:
-        model_path = pathlib.Path(args.output)
-    model_path.mkdir(exist_ok=True)
 
     temp_save = {}
     # models: "dict[str, arch.CoreDef]" = {}
