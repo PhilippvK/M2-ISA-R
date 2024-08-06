@@ -15,12 +15,11 @@ import pickle
 import shutil
 import time
 
-from m2isar.metamodel.arch import CoreDef
-
+from ...metamodel import M2_METAMODEL_VERSION, M2Model
 from ...metamodel.utils.expr_preprocessor import (process_attributes,
                                                   process_functions,
                                                   process_instructions)
-from . import BlockEndType
+from . import BlockEndType, CodeInfoTracker
 from .architecture_writer import (write_arch_cmake, write_arch_cpp,
                                   write_arch_gdbcore, write_arch_header,
                                   write_arch_lib, write_arch_specific_cpp,
@@ -84,6 +83,7 @@ def setup():
 	parser.add_argument("--static-scalars", action=BooleanOptionalAction, default=True, help="Enable static detection for scalars.")
 	parser.add_argument("--block-end-on", default="none", choices=[x.name.lower() for x in BlockEndType],
 		help="Force end translation blocks on no instructions, uncoditional jumps or all jumps.")
+	parser.add_argument("--coverage", action=BooleanOptionalAction, default=False, help="Generate coverage tracking code into model.")
 	parser.add_argument("--log", default="info", choices=["critical", "error", "warning", "info", "debug"])
 	args = parser.parse_args()
 
@@ -114,11 +114,14 @@ def setup():
 	logger.info("loading models")
 
 	with open(model_fname, 'rb') as f:
-		models: "dict[str, CoreDef]" = pickle.load(f)
+		model_obj: M2Model = pickle.load(f)
+
+	if model_obj.model_version != M2_METAMODEL_VERSION:
+		logger.warning("Loaded model version mismatch")
 
 	start_time = time.strftime("%a, %d %b %Y %H:%M:%S %z", time.localtime())
 
-	return (models, logger, output_base_path, spec_name, start_time, args)
+	return (model_obj.models, logger, output_base_path, spec_name, start_time, args)
 
 def main():
 	"""etiss_writer main entrypoint function."""
@@ -166,8 +169,12 @@ def main():
 		write_arch_lib(core, start_time, output_path)
 		write_arch_cmake(core, start_time, output_path, args.separate)
 		write_arch_gdbcore(core, start_time, output_path)
-		write_functions(core, start_time, output_path, args.static_scalars)
-		write_instructions(core, start_time, output_path, args.separate, args.static_scalars, BlockEndType[args.block_end_on.upper()])
+		write_functions(core, start_time, output_path, args.static_scalars, args.coverage)
+		write_instructions(core, start_time, output_path, args.separate, args.static_scalars, BlockEndType[args.block_end_on.upper()], args.coverage)
+
+		with open(output_path / "coverage.csv", "w") as f:
+			for c_id, c_info in sorted(CodeInfoTracker.tracker[core_name].items()):
+				f.write(f"{c_id}\n")
 
 if __name__ == "__main__":
 	main()

@@ -2,11 +2,13 @@
 #
 # This file is part of the M2-ISA-R project: https://github.com/tum-ei-eda/M2-ISA-R
 #
-# Copyright (C) 2022
+# Copyright (C) 2024
 # Chair of Electrical Design Automation
 # Technical University of Munich
 
-mako
-antlr4-python3-runtime~=4.13.1
-antlr4-tools
-tqdm
+from collections import defaultdict
+
+class IdMatcherContext:
+	def __init__(self):
+		self.arch_name = None
+		self.id_to_obj_map = defaultdict(dict)

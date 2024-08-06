@@ -30,7 +30,12 @@ the hierarchy.
 
 import inspect
 import logging
-from . import behav, arch
+from dataclasses import dataclass
+
+from . import arch, behav, code_info
+
+M2_METAMODEL_VERSION = 2
+
 
 def patch_model(module):
 	"""Monkey patch transformation functions inside `module`
@@ -69,3 +74,19 @@ intrinsics = {x.name: x for x in intrinsic_defs}
 #@property
 #def intrinsics():
 #	return {x.name: x for x in intrinsic_defs}
+
+@dataclass
+class M2Model:
+	model_version: int
+	models: "dict[str, arch.CoreDef]"
+	code_infos: "dict[int, code_info.CodeInfoBase]"
+
+	def __post_init__(self):
+		self.line_infos: dict[int, code_info.LineInfo] = {}
+		self.function_infos: dict[int, code_info.FunctionInfo] = {}
+
+		for idx, c in self.code_infos.items():
+			if isinstance(c, code_info.LineInfo):
+				self.line_infos[idx] = c
+			elif isinstance(c, code_info.FunctionInfo):
+				self.function_infos[idx] = c

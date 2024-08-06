@@ -137,7 +137,8 @@ def write_arch_cpp(core: arch.CoreDef, start_time: str, output_path: pathlib.Pat
 		ptr_regs=ptr_regs,
 		actual_regs=actual_regs,
 		alias_regs=alias_regs,
-		initval_regs=initval_regs
+		initval_regs=initval_regs,
+		procno_memory=core.procno_memory
 	)
 
 	with open(output_path / f"{core.name}Arch.cpp", "w", encoding="utf-8") as f:
@@ -190,7 +191,7 @@ def write_arch_specific_cpp(core: arch.CoreDef, start_time: str, output_path: pa
 	if error_fn is not None:
 		for bitsize in core.instr_classes:
 			error_bitfield = arch.BitField("error_code", arch.RangeSpec(31, 0), arch.DataType.U)
-			error_instr = arch.Instruction(f"trap_entry {bitsize}", {arch.InstrAttribute.NO_CONT: None}, [error_bitfield], "", "", None)
+			error_instr = arch.Instruction(f"trap_entry {bitsize}", {arch.InstrAttribute.NO_CONT: None}, [error_bitfield], "", "", None, None)
 			error_bitfield_descr = error_instr.fields.get("error_code")
 			error_op = behav.Operation([
 				behav.ProcedureCall(error_fn, [behav.NamedReference(error_bitfield_descr)])
@@ -200,7 +201,7 @@ def write_arch_specific_cpp(core: arch.CoreDef, start_time: str, output_path: pa
 			error_instr._size = bitsize # pylint: disable=protected-access
 
 			error_fields = generate_fields(32, error_instr)
-			error_callbacks[bitsize] = generate_instruction_callback(core, error_instr, error_fields, True, BlockEndType.NONE)
+			error_callbacks[bitsize] = generate_instruction_callback(core, error_instr, error_fields, True, BlockEndType.NONE, False)
 
 	logger.info("writing architecture specific file")
 

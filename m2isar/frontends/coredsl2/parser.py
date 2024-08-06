@@ -14,7 +14,9 @@ import pickle
 import sys
 
 from ... import M2Error, M2SyntaxError
-from ...metamodel import arch, behav, patch_model
+from ...metamodel import (M2_METAMODEL_VERSION, M2Model, arch, behav,
+                          patch_model)
+from ...metamodel.code_info import CodeInfoBase
 from . import expr_interpreter
 from .architecture_model_builder import ArchitectureModelBuilder
 from .behavior_model_builder import BehaviorModelBuilder
@@ -29,8 +31,6 @@ def main():
 	parser.add_argument("--log", default="info", choices=["critical", "error", "warning", "info", "debug"])
 
 	args = parser.parse_args()
-
-	app_dir = pathlib.Path(__file__).parent.resolve()
 
 	logging.basicConfig(level=getattr(logging, args.log.upper()))
 	logger = logging.getLogger("parser")
@@ -62,12 +62,12 @@ def main():
 	model_path.mkdir(exist_ok=True)
 
 	temp_save = {}
-	models: "dict[tuple(int, int), arch.CoreDef]" = {}
+	models: "dict[str, arch.CoreDef]" = {}
 
 	patch_model(expr_interpreter)
 
 	for core_name, core_def in cores.items():
-		logger.info(f'building architecture model for core {core_name}')
+		logger.info('building architecture model for core %s', core_name)
 		try:
 			arch_builder = ArchitectureModelBuilder()
 			c = arch_builder.visit(core_def)
@@ -250,7 +250,14 @@ def main():
 
 	logger.info("dumping model")
 	with open(model_path / (abs_top_level.stem + '.m2isarmodel'), 'wb') as f:
-		pickle.dump(models, f)
+		model_obj = M2Model(
+			M2_METAMODEL_VERSION,
+			models,
+			CodeInfoBase.database
+		)
+
+		pickle.dump(model_obj, f)
+
 
 if __name__ == '__main__':
 	main()

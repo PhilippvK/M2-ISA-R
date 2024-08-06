@@ -10,8 +10,10 @@ import itertools
 import logging
 from typing import Union
 
-from ... import M2DuplicateError, M2NameError, M2TypeError, M2ValueError, flatten
+from ... import (M2DuplicateError, M2NameError, M2TypeError, M2ValueError,
+                 flatten)
 from ...metamodel import arch, behav, intrinsics
+from ...metamodel.code_info import FunctionInfoFactory
 from .parser_gen import CoreDSL2Parser, CoreDSL2Visitor
 from .utils import RADIX, SHORTHANDS, SIGNEDNESS
 
@@ -56,8 +58,8 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 		right = self.visit(ctx.right)
 
 		# instantiate M2-ISA-R objects
-		range = arch.RangeSpec(left.value, right.value)
-		return arch.BitField(ctx.name.text, range, arch.DataType.U)
+		range_spec = arch.RangeSpec(left.value, right.value)
+		return arch.BitField(ctx.name.text, range_spec, arch.DataType.U)
 
 	def visitBit_value(self, ctx: CoreDSL2Parser.Bit_valueContext):
 		"""Generate a fixed encoding part."""
@@ -167,10 +169,13 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 		assembly = ctx.assembly.text.replace("\"", "") if ctx.assembly is not None else None
 		mnemonic = ctx.mnemonic.text.replace("\"", "") if ctx.mnemonic is not None else None
 
-		i = arch.Instruction(ctx.name.text, attributes, encoding, mnemonic, assembly, ctx.behavior)
+		i = arch.Instruction(ctx.name.text, attributes, encoding, mnemonic, assembly, ctx.behavior, None)
 		self._instr_classes.add(i.size)
 
 		instr_id = (i.code, i.mask)
+
+		opcode_str = "{code:0{width}x}:{mask:0{width}x}".format(code=i.code, mask=i.mask, width=i.size//4)
+		i.function_info = FunctionInfoFactory.make(ctx.start.source[1].fileName, ctx.start.start, ctx.stop.stop, ctx.start.line, ctx.stop.line, f"instr_{i.name}_{opcode_str}")
 
 		# check for duplicate instructions
 		if instr_id in self._instructions:
@@ -210,6 +215,8 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 			data_type = arch.DataType.S if type_.signed else arch.DataType.U
 
 		f = arch.Function(name, attributes, return_size, data_type, params, ctx.behavior, ctx.extern is not None)
+		if not f.extern:
+			f.function_info = FunctionInfoFactory.make(ctx.start.source[1].fileName, ctx.start.start, ctx.stop.stop, ctx.start.line, ctx.stop.line, "fn_" + f.name)
 
 		# error on duplicate function definition
 		# TODO: implement overwriting function prototypes?
@@ -314,13 +321,13 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 				if decl.attributes:
 					attributes = dict([self.visit(obj) for obj in decl.attributes])
 
-				range = arch.RangeSpec(left, right)
+				range_spec = arch.RangeSpec(left, right)
 
 				#if range.length != size[0]:
 				#	raise ValueError(f"range mismatch for \"{name}\"")
 
 				# instantiate M2-ISA-R object, keep track of parent - child relations
-				m = arch.Memory(name, range, type_._width, attributes)
+				m = arch.Memory(name, range_spec, type_._width, attributes)
 				m.parent = reference
 				m.parent.children.append(m)
 
@@ -367,8 +374,8 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 					if decl.attributes:
 						attributes = dict([self.visit(obj) for obj in decl.attributes])
 
-					range = arch.RangeSpec(size[0])
-					m = arch.Memory(name, range, type_._width, attributes)
+					range_spec = arch.RangeSpec(size[0])
+					m = arch.Memory(name, range_spec, type_._width, attributes)
 
 					# attach init value to memory object
 					if init is not None:

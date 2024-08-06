@@ -15,10 +15,13 @@ import dataclasses
 import itertools
 from collections import defaultdict
 from enum import Enum, IntEnum, auto
-from typing import Any, Union
+from typing import TYPE_CHECKING, Any, Union
 
 from .. import M2TypeError
 from .behav import BaseNode, Operation
+
+if TYPE_CHECKING:
+	from .code_info import FunctionInfo
 
 
 def get_const_or_val(arg) -> int:
@@ -200,6 +203,7 @@ class MemoryAttribute(Enum):
 	ETISS_IS_GLOBAL_IRQ_EN = auto()
 	ETISS_IS_IRQ_EN = auto()
 	ETISS_IS_IRQ_PENDING = auto()
+	ETISS_IS_PROCNO = auto()
 
 class ConstAttribute(Enum):
 	IS_REG_WIDTH = auto()
@@ -419,7 +423,7 @@ class Instruction(SizedRefOrConst):
 	code: int
 
 	def __init__(self, name, attributes: "dict[InstrAttribute, list[BaseNode]]", encoding: "list[Union[BitField, BitVal]]",
-			mnemonic: str, assembly: str, operation: Operation):
+			mnemonic: str, assembly: str, operation: Operation, function_info: "FunctionInfo"):
 
 		self.ext_name = ""
 		self.attributes = attributes if attributes else {}
@@ -430,6 +434,7 @@ class Instruction(SizedRefOrConst):
 		self.assembly = assembly
 		self.operation = operation if operation is not None else Operation([])
 		self.throws = False
+		self.function_info = function_info
 
 		self.mask = 0
 		self.code = 0
@@ -474,7 +479,7 @@ class Function(SizedRefOrConst):
 	static: bool
 
 	def __init__(self, name, attributes: "dict[FunctionAttribute, list[BaseNode]]", return_len, data_type: DataType, args: "list[FnParam]",
-			operation: "Operation", extern: bool=False):
+			operation: "Operation", extern: bool=False, function_info: "FunctionInfo"=None):
 
 		self.ext_name = ""
 		self.data_type = data_type
@@ -485,6 +490,8 @@ class Function(SizedRefOrConst):
 			args = []
 
 		self.args: "dict[str, FnParam]" = {}
+
+		self.function_info = function_info
 
 		for idx, arg in enumerate(args):
 			if arg.name is None:
@@ -569,6 +576,7 @@ class CoreDef(Named):
 		self.pc_memory = None
 		self.global_irq_en_memory = None
 		self.global_irq_en_mask = None
+		self.procno_memory = None
 		self.irq_en_memory = None
 		self.irq_pending_memory = None
 		self.intrinsics = intrinsics
@@ -593,6 +601,8 @@ class CoreDef(Named):
 				self.main_memory = mem
 			elif MemoryAttribute.ETISS_IS_GLOBAL_IRQ_EN in mem.attributes:
 				self.global_irq_en_memory = mem
+			elif MemoryAttribute.ETISS_IS_PROCNO in mem.attributes:
+				self.procno_memory = mem
 			elif MemoryAttribute.ETISS_IS_IRQ_EN in mem.attributes:
 				self.irq_en_memory = mem
 			elif MemoryAttribute.ETISS_IS_IRQ_PENDING in mem.attributes:

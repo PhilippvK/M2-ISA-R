@@ -8,12 +8,13 @@
 
 """Utility classes and functions for instruction generation."""
 
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from itertools import chain
 from string import Template
 
 from ... import M2ValueError
 from ...metamodel import arch
+from ...metamodel.code_info import LineInfo
 from ...metamodel.utils import StaticType
 from . import replacements
 
@@ -43,8 +44,9 @@ class CodeString:
 
 	mem_ids: "list[MemID]"
 	function_calls: "list[FnID]"
+	line_infos: "list[LineInfo]"
 
-	def __init__(self, code, static, size, signed, regs_affected=None):
+	def __init__(self, code, static, size, signed, regs_affected=None, line_infos=[]):
 		self.code = code
 		self.static = StaticType(static)
 		self.size = size
@@ -55,6 +57,13 @@ class CodeString:
 		self.is_literal = False
 		self.function_calls = []
 		self.check_trap = False
+
+		if isinstance(line_infos, LineInfo):
+			self.line_infos = [line_infos]
+		elif isinstance(line_infos, list):
+			self.line_infos = line_infos
+		else:
+			self.line_infos = []
 
 	@property
 	def actual_size(self):
@@ -77,7 +86,7 @@ class CodeString:
 	@property
 	def read_mem_ids(self):
 		for m in self.mem_ids:
-			if m.write == False:
+			if not m.write:
 				yield m
 
 	def __str__(self):
@@ -97,12 +106,14 @@ class MemID:
 
 @dataclass
 class FnID:
+	"""Track a required function call across recursive code generation."""
 	fn_call: arch.Function
 	fn_id: int
 	args: CodeString
 
 @dataclass
 class CodePartsContainer:
+	"""Container class to encapsulate different ETISS JIT code snippet types."""
 	pre_initial_debug_returning: str = None
 	initial_required: str = None
 	optional_middle: str = None
@@ -130,7 +141,7 @@ class TransformerContext:
 
 	def __init__(self, constants: "dict[str, arch.Constant]", memories: "dict[str, arch.Memory]", memory_aliases: "dict[str, arch.Memory]",
 			fields: "dict[str, arch.BitFieldDescr]", attributes: "list[arch.InstrAttribute]", functions: "dict[str, arch.Function]",
-			instr_size: int, native_size: int, arch_name: str, static_scalars: bool, intrinsics, ignore_static=False):
+			instr_size: int, native_size: int, arch_name: str, static_scalars: bool, intrinsics, generate_coverage: bool, ignore_static=False):
 
 		self.constants = constants
 		self.memories = memories
@@ -143,8 +154,11 @@ class TransformerContext:
 		self.arch_name = arch_name
 		self.intrinsics = intrinsics
 		self.static_scalars = static_scalars
+		self.generate_coverage = generate_coverage
 
 		self.ignore_static = ignore_static
+
+		self.found_code_infos = []
 
 		self.code_lines = []
 
