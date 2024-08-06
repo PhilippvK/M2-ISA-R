@@ -179,12 +179,16 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
         """Generate non-behavioral parts of an instruction."""
 
         # read encoding, attributes and disassembly
+        operands = ctx.operands
+        operands = [self.visit(op) for op in operands]
+        operands = flatten(operands)
+        operands = {op.name: op for op in operands}
         encoding = [self.visit(obj) for obj in ctx.encoding]
         attributes = dict([self.visit(obj) for obj in ctx.attributes])
         assembly = ctx.assembly.text.replace('"', "") if ctx.assembly is not None else None
         mnemonic = ctx.mnemonic.text.replace('"', "") if ctx.mnemonic is not None else None
 
-        i = arch.Instruction(ctx.name.text, attributes, encoding, mnemonic, assembly, ctx.behavior, None)
+        i = arch.Instruction(ctx.name.text, attributes, operands, encoding, mnemonic, assembly, ctx.behavior, None)
         self._instr_classes.add(i.size)
 
         instr_id = (i.code, i.mask)

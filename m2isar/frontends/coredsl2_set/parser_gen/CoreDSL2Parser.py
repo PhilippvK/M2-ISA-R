@@ -1301,7 +1301,7 @@ class CoreDSL2Parser ( Parser ):
             self._attribute = None # AttributeContext
             self.attributes = list() # of AttributeContexts
             self._declaration = None # DeclarationContext
-            self.declarations = list() # of DeclarationContexts
+            self.operands = list() # of DeclarationContexts
             self._encoding_entry = None # Encoding_entryContext
             self.encoding = list() # of Encoding_entryContexts
             self.assembly = None # Token
@@ -1400,7 +1400,7 @@ class CoreDSL2Parser ( Parser ):
                 while (((_la) & ~0x3f) == 0 and ((1 << _la) & 2251250058919936) != 0) or ((((_la - 86)) & ~0x3f) == 0 and ((1 << (_la - 86)) & 63) != 0):
                     self.state = 229
                     localctx._declaration = self.declaration()
-                    localctx.declarations.append(localctx._declaration)
+                    localctx.operands.append(localctx._declaration)
                     self.state = 234
                     self._errHandler.sync(self)
                     _la = self._input.LA(1)

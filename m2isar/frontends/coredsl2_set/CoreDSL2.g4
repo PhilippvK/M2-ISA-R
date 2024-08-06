@@ -35,7 +35,7 @@ always_block
 
 instruction
 	: name=IDENTIFIER attributes+=attribute* '{'
-	('operands' ':' '{' (declarations+=declaration)* '}')?
+	('operands' ':' '{' (operands+=declaration)* '}')?
 	'encoding' ':' encoding+=encoding_entry ('::' encoding+=encoding_entry)*';'
 	('assembly' ':' (assembly=STRING | '{' mnemonic=STRING ',' assembly=STRING '}') ';')?
 	'behavior' ':' behavior=statement
