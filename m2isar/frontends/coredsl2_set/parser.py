@@ -103,8 +103,8 @@ def main():
 
     for set_name, set_def in models.items():
         logger.info("building behavior model for set %s", set_name)
-        print("set", set_name, set_def, dir(set_def))
-        input(">>>")
+        # print("set", set_name, set_def, dir(set_def))
+        # input(">>>")
 
         warned_fns = set()
 
@@ -257,8 +257,8 @@ def main():
             always_block_statements.append(op)
 
         logger.debug("generating instruction behavior")
-        print("set_def.instructions", set_def.instructions)
-        input("%%")
+        # print("set_def.instructions", set_def.instructions)
+        # input("%%")
 
         for instr_def in set_def.instructions.values():
             logger.debug("generating instruction %s", instr_def.name)
@@ -323,7 +323,89 @@ def main():
             op.statements = always_block_statements + op.statements
             instr_def.operation = op
 
+        # Process unencoded instructions
+        print("AAA")
+        for instr_def in set_def.unencoded_instructions.values():
+            logger.debug("generating instruction %s", instr_def.name)
+            logger.debug("generating attributes")
+
+            for attr_name, attr_ops in instr_def.attributes.items():
+                ops = []
+                for attr_op in attr_ops:
+                    try:
+                        behav_builder = BehaviorModelBuilder(
+                            set_def.constants,
+                            set_def.memories,
+                            set_def.memory_aliases,
+                            instr_def.fields,
+                            set_def.functions,
+                            warned_fns,
+                        )
+                        op = behav_builder.visit(attr_op)
+                        ops.append(op)
+                    except M2Error as e:
+                        logger.critical(
+                            'error processing attribute "%s" of instruction "%s": %s', attr_name, instr_def.name, e
+                        )
+                        sys.exit(1)
+
+                instr_def.attributes[attr_name] = ops
+
+            behav_builder = BehaviorModelBuilder(
+                set_def.constants,
+                set_def.memories,
+                set_def.memory_aliases,
+                instr_def.fields,
+                set_def.functions,
+                warned_fns,
+            )
+
+            try:
+                op = behav_builder.visit(instr_def.operation)
+            except M2Error as e:
+                logger.critical(
+                    "error building behavior for instruction %s::%s: %s", instr_def.ext_name, instr_def.name, e
+                )
+                sys.exit(1)
+
+            instr_def.scalars = behav_builder._scalars
+
+            if isinstance(op, list):
+                op = behav.Operation(op)
+            else:
+                op = behav.Operation([op])
+
+            # pc_inc = behav.Assignment(
+            # 	behav.NamedReference(set_def.pc_memory),
+            # 	behav.BinaryOperation(
+            # 		behav.NamedReference(set_def.pc_memory),
+            # 		behav.Operator("+"),
+            # 		behav.IntLiteral(int(instr_def.size/8))
+            # 	)
+            # )
+
+            # op.statements.insert(0, pc_inc)
+            op.statements = always_block_statements + op.statements
+            instr_def.operation = op
+        print("BBB")
+
     logger.info("dumping model")
+    # # print("@1", list(models["MySet"].unencoded_instructions.values())[0].__dict__)
+    # print("@1", type(list(models["MySet"].unencoded_instructions.values())[0].__dict__["operation"]))
+    # # print("@2", pickle.dumps(list(models["MySet"].unencoded_instructions.values())))
+    # print("@2", pickle.dumps(list(models["MySet"].unencoded_instructions.values())[0].__dict__["ext_name"]))
+    # print("@2", pickle.dumps(list(models["MySet"].unencoded_instructions.values())[0].__dict__["attributes"]))
+    # print("@2", pickle.dumps(list(models["MySet"].unencoded_instructions.values())[0].__dict__["encoding"]))
+    # print("@2", pickle.dumps(list(models["MySet"].unencoded_instructions.values())[0].__dict__["fields"]))
+    # print("@2", pickle.dumps(list(models["MySet"].unencoded_instructions.values())[0].__dict__["scalars"]))
+    # print("@2", pickle.dumps(list(models["MySet"].unencoded_instructions.values())[0].__dict__["mnemonic"]))
+    # print("@2", pickle.dumps(list(models["MySet"].unencoded_instructions.values())[0].__dict__["assembly"]))
+    # print("#2", list(models["MySet"].unencoded_instructions.values())[0].__dict__["operation"])
+    # print("@2", pickle.dumps(list(models["MySet"].unencoded_instructions.values())[0].__dict__["operation"]))
+    # print("@2", pickle.dumps(list(models["MySet"].unencoded_instructions.values())[0].__dict__["throws"]))
+    # print("@2", pickle.dumps(list(models["MySet"].unencoded_instructions.values())[0].__dict__["function_info"]))
+    # print("@2", pickle.dumps(list(models["MySet"].unencoded_instructions.values())[0].__dict__["mask"]))
+    # print("@2", pickle.dumps(list(models["MySet"].unencoded_instructions.values())[0].__dict__["code"]))
     with open(model_path / (abs_top_level.stem + ".m2isarmodel"), "wb") as f:
         pickle.dump(models, f)
 

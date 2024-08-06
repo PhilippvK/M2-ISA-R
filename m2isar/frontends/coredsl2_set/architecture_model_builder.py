@@ -69,10 +69,10 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 
     def visitAuto_field(self, ctx: CoreDSL2Parser.Auto_fieldContext):
         """Generate undefined part of encoding."""
-        import traceback
+        # import traceback
 
-        traceback.print_stack()
-        input("1")
+        # traceback.print_stack()
+        # input("1")
 
         return None
 
@@ -204,8 +204,9 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
         attributes = dict([self.visit(obj) for obj in ctx.attributes])
         assembly = ctx.assembly.text.replace('"', "") if ctx.assembly is not None else None
         mnemonic = ctx.mnemonic.text.replace('"', "") if ctx.mnemonic is not None else None
+        name = ctx.name.text
 
-        i = arch.Instruction(name, attributes, encoding, mnemonic, assembly, ctx.behavior, None)
+        i = arch.Instruction(name, attributes, operands, encoding, mnemonic, assembly, ctx.behavior, None)
         if i.has_encoding:
             self._instr_classes.add(i.size)
             instr_id = (i.code, i.mask)
