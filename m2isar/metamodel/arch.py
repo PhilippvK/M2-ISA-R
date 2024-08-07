@@ -482,18 +482,37 @@ class Instruction(SizedRefOrConst):
         self.throws = False
         self.function_info = function_info
 
-        self.mask = 0
-        self.code = 0
-
         super().__init__(name, 0)
 
+        self.process_encoding()
+        if operands:
+            if self.has_encoding:
+                assert len(self.fields) == len(operands), f"{len(self.fields)} != {len(operands)} ?"
+                for op_name, op_decl in operands.items():
+                    descr = self.fields.get(op_name, None)
+                    assert op_decl.value is None
+                    # TODO: check op_decl.attributes
+                    assert descr is not None
+                    assert descr.size == op_decl.size
+                    if op_decl.signed:
+                        assert descr.data_type == DataType.S
+                    else:
+                        assert descr.data_type == DataType.U
+
+    def process_encoding(self):
+        # print("process_encoding")
+        self.mask = 0
+        self.code = 0
+        self._size = 0
+
+        # print("self.encoding", self.encoding)
         for e in reversed(self.encoding):
-            print("e", e)
+            # print("e", e)
             if e is None:
                 self._size = None
                 self.mask = None
                 self.code = None
-                print("break")
+                # print("break")
                 break
             if isinstance(e, BitField):
                 self._size += e.range.length
@@ -512,19 +531,6 @@ class Instruction(SizedRefOrConst):
                 self.code |= e.value << self._size
 
                 self._size += e.length
-        if operands:
-            if self.has_encoding:
-                assert len(self.fields) == len(operands), f"{len(self.fields)} != {len(operands)} ?"
-                for op_name, op_decl in operands.items():
-                    descr = self.fields.get(op_name, None)
-                    assert op_decl.value is None
-                    # TODO: check op_decl.attributes
-                    assert descr is not None
-                    assert descr.size == op_decl.size
-                    if op_decl.signed:
-                        assert descr.data_type == DataType.S
-                    else:
-                        assert descr.data_type == DataType.U
 
     @property
     def has_encoding(self):

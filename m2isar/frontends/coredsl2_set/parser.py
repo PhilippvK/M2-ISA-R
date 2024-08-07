@@ -12,9 +12,11 @@ import logging
 import pathlib
 import pickle
 import sys
+from typing import List, Union
 
 from m2isar import M2Error, M2SyntaxError
-from m2isar.metamodel import arch, behav, patch_model
+from ...metamodel import M2_METAMODEL_VERSION, M2Model, arch, behav, patch_model
+from ...metamodel.code_info import CodeInfoBase
 from . import expr_interpreter
 from .architecture_model_builder import ArchitectureModelBuilder
 from .behavior_model_builder import BehaviorModelBuilder
@@ -26,9 +28,10 @@ from .utils import make_parser
 logger = logging.getLogger("set_parser")
 
 
-def parse_cdsl2_set(top_level: pathlib.Path):
+def parse_cdsl2_set(top_level: pathlib.Path, extra_includes: List[Union[str, pathlib.Path]]):
     abs_top_level = top_level.resolve()
-    search_path = abs_top_level.parent
+    extra_includes = list(map(pathlib.Path, extra_includes))
+    search_paths = [abs_top_level.parent] + extra_includes
 
     parser = make_parser(abs_top_level)
 
@@ -36,7 +39,7 @@ def parse_cdsl2_set(top_level: pathlib.Path):
         logger.info("parsing top level")
         tree = parser.description_content()
 
-        recursive_import(tree, search_path)
+        recursive_import(tree, search_paths)
     except M2SyntaxError as e:
         logger.critical("Error during parsing: %s", e)
         sys.exit(1)
@@ -372,6 +375,25 @@ def parse_cdsl2_set(top_level: pathlib.Path):
             op.statements = always_block_statements + op.statements
             instr_def.operation = op
         print("BBB")
+    return models
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("top_level", help="The top-level CoreDSL file.")
+    parser.add_argument("-I", dest="includes", action="append", type=str, help="Extra include dirs.")
+    parser.add_argument("--log", default="info", choices=["critical", "error", "warning", "info", "debug"])
+
+    args = parser.parse_args()
+
+    logging.basicConfig(level=getattr(logging, args.log.upper()))
+
+    top_level = pathlib.Path(args.top_level)
+    abs_top_level = top_level.resolve()
+    model_path = abs_top_level.parent.joinpath("gen_model")
+    model_path.mkdir(exist_ok=True)
+
+    models = parse_cdsl2_set(top_level, extra_includes=args.includes)
 
     logger.info("dumping model")
     # # print("@1", list(models["MySet"].unencoded_instructions.values())[0].__dict__)
@@ -391,7 +413,8 @@ def parse_cdsl2_set(top_level: pathlib.Path):
     # print("@2", pickle.dumps(list(models["MySet"].unencoded_instructions.values())[0].__dict__["mask"]))
     # print("@2", pickle.dumps(list(models["MySet"].unencoded_instructions.values())[0].__dict__["code"]))
     with open(model_path / (abs_top_level.stem + ".m2isarmodel"), "wb") as f:
-        pickle.dump(models, f)
+        model_obj = M2Model(M2_METAMODEL_VERSION, {}, models, CodeInfoBase.database)
+        pickle.dump(model_obj, f)
 
 
 if __name__ == "__main__":
