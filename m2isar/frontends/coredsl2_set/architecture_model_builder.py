@@ -316,6 +316,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 
     def visitDeclaration(self, ctx: CoreDSL2Parser.DeclarationContext):
         """Generate a declaration."""
+        is_operand = isinstance(ctx.parentCtx, CoreDSL2Parser.InstructionContext)
 
         # extract storage type, qualifiers and attributes
         storage = [self.visit(obj) for obj in ctx.storage]
@@ -336,6 +337,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 
             # generate a register alias
             if type_.ptr == "&":
+                assert not is_operand
                 # error out on duplicate declaration
                 if name in self._memory_aliases:
                     raise M2DuplicateError(f"memory {name} already defined")
@@ -383,15 +385,19 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
                     # extract initializer if present
                     init = None
                     if decl.init is not None:
+                        assert not is_operand
                         init = self.visit(decl.init)
 
                     c = arch.Constant(name, init, [], type_._width, type_.signed)
 
-                    self._constants[name] = c
+                    # TODO: Create bitfielddescr instead of Constant and store in fields?
+                    if not is_operand:
+                        self._constants[name] = c
                     ret_decls.append(c)
 
                 # register and extern declaration: "Memory" object in M2-ISA-R
                 elif "register" in storage or "extern" in storage:
+                    assert not is_operand
                     if name in self._memories:
                         raise M2DuplicateError(f"memory {name} already defined")
 

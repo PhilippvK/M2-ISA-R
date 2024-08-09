@@ -498,6 +498,13 @@ class Instruction(SizedRefOrConst):
                         assert descr.data_type == DataType.S
                     else:
                         assert descr.data_type == DataType.U
+            else:
+                assert len(self.fields) == 0, "TODO: allow manual encoding + operands"
+                for op_name, op_decl in operands.items():
+                    sz = op_decl.size
+                    dtype = DataType.S if op_decl.signed else DataType.U
+                    descr = BitFieldDescr(op_name, sz, dtype)
+                    self.fields[op_name] = descr
 
     def process_encoding(self):
         # print("process_encoding")
