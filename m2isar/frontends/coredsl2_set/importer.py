@@ -103,9 +103,9 @@ class VisitImporter(CoreDSL2Visitor):
         """
 
         import_name = ctx.uri.text.replace('"', "")
-        print("import_name", import_name)
+        # print("import_name", import_name)
         filename = str(pathlib.Path(import_name).resolve())
-        print("filename", filename)
+        # print("filename", filename)
 
         # only import each file once
         if filename not in self.imported:
@@ -148,7 +148,7 @@ class ImportPathExtender(CoreDSL2Visitor):
 
     def visitImport_file(self, ctx: CoreDSL2Parser.Import_fileContext):
         fname = ctx.uri.text.replace('"', "")
-        print("self.search_paths", self.search_paths)
+        # print("self.search_paths", self.search_paths)
         found_paths = [x for x in self.search_paths if (x / fname).is_file()]
         assert len(found_paths) > 0, f"{fname} not found in search paths: {self.search_paths}"
         found_path = found_paths[0]

@@ -268,6 +268,61 @@ class CoreDSL2Writer:
         self.leave_block()
 
 
+def write_includes(writer, used_extensions, includes_prefix: str = "rv_base/", tum_includes_prefix: str = ""):
+    if "RV32I" in used_extensions:
+        writer.write(f'import "{includes_prefix}RV32I.core_desc"', nl=True)
+    if "RV64I" in used_extensions:
+        writer.write(f'import "{includes_prefix}RV64I.core_desc"', nl=True)
+    if "RV32M" in used_extensions or "RV64M" in used_extensions:
+        writer.write(f'import "{includes_prefix}RVM.core_desc"', nl=True)
+    if "RV32IC" in used_extensions or "RV64IC" in used_extensions:
+        writer.write(f'import "{includes_prefix}RVC.core_desc"', nl=True)
+    if "RV32F" in used_extensions or "RV64F" in used_extensions:
+        writer.write(f'import "{includes_prefix}RVF.core_desc"', nl=True)
+    if "RV32D" in used_extensions or "RV64D" in used_extensions:
+        writer.write(f'import "{includes_prefix}RVD.core_desc"', nl=True)
+
+    # add tum extensions at the end
+    if "tum_csr" in used_extensions:
+        writer.write(f'import "{tum_includes_prefix}tum_mod.core_desc"', nl=True)
+        writer.write(f'import "{tum_includes_prefix}tum_rva.core_desc"', nl=True)
+        writer.write(f'import "{tum_includes_prefix}tum_rvm.core_desc"', nl=True)
+    writer.write("\n")
+
+
+def gen_cdsl_code(
+    model_obj, with_includes: bool = True, includes_prefix: str = "rv_base/", tum_includes_prefix: str = ""
+):
+    # preprocess model
+    # print("model", model["sets"]["XCoreVMac"].keys())
+    writer = CoreDSL2Writer()
+
+    # write imports
+    core_defs = [core for core in model_obj.cores.values()]
+    if core_defs:  # TODO add imports if an instruction set extends another set
+        if with_includes:
+            used_extensions = set()
+            # gather needed imports
+            for core_def in core_defs:
+                used_extensions.update(core_def.contributing_types)
+
+            write_includes(writer, used_extensions)
+
+    for set_name, set_def in model_obj.sets.items():
+        logger.debug("writing set %s", set_def.name)
+        if with_includes:
+            write_includes(writer, set_def.extension)
+        patch_model(visitor)
+        writer.write_set(set_def)
+        # context = DropUnusedContext(list(set_def.constants.keys()))
+
+    if core_defs:
+        for core_def in core_defs:
+            logger.info("Writing Core: %s", core_def.name)
+            writer.write_core(core_def)
+    return writer.text
+
+
 def main():
     """Main app entrypoint."""
 
@@ -310,54 +365,10 @@ def main():
     if model_obj.model_version != M2_METAMODEL_VERSION:
         logger.warning("Loaded model version mismatch")
 
-    # return (model_obj.models, logger, output_base_path, spec_name, start_time, args)
+    cdsl_code = gen_cdsl_code(model_obj)
 
-    # preprocess model
-    # print("model", model["sets"]["XCoreVMac"].keys())
-    writer = CoreDSL2Writer()
-
-    # write imports
-    core_defs = [core for core in model_obj.cores.values()]
-    if core_defs:  # TODO add imports if an instruction set extends another set
-        used_extensions = set()
-        ## gather needed imports
-        for core_def in core_defs:
-            used_extensions.update(core_def.contributing_types)
-
-        if "RV32I" in used_extensions:
-            writer.write('import "rv_base/RV32I.core_desc"', nl=True)
-        if "RV64I" in used_extensions:
-            writer.write('import "rv_base/RV64I.core_desc"', nl=True)
-        if "RV32M" in used_extensions or "RV64M" in used_extensions:
-            writer.write('import "rv_base/RVM.core_desc"', nl=True)
-        if "RV32IC" in used_extensions or "RV64IC" in used_extensions:
-            writer.write('import "rv_base/RVC.core_desc"', nl=True)
-        if "RV32F" in used_extensions or "RV64F" in used_extensions:
-            writer.write('import "rv_base/RVF.core_desc"', nl=True)
-        if "RV32D" in used_extensions or "RV64D" in used_extensions:
-            writer.write('import "rv_base/RVD.core_desc"', nl=True)
-
-        # add tum extensions at the end
-        if "tum_csr" in used_extensions:
-            writer.write('import "tum_mod.core_desc"', nl=True)
-            writer.write('import "tum_rva.core_desc"', nl=True)
-            writer.write('import "tum_rvm.core_desc"', nl=True)
-        writer.write("\n")
-
-    for set_name, set_def in model_obj.sets.items():
-        logger.debug("writing set %s", set_def.name)
-        patch_model(visitor)
-        writer.write_set(set_def)
-        # context = DropUnusedContext(list(set_def.constants.keys()))
-
-    if core_defs:
-        for core_def in core_defs:
-            logger.info("Writing Core: %s", core_def.name)
-            writer.write_core(core_def)
-
-    content = writer.text
     with open(out_path, "w") as f:
-        f.write(content)
+        f.write(cdsl_code)
 
 
 if __name__ == "__main__":

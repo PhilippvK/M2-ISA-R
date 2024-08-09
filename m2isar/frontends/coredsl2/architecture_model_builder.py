@@ -71,9 +71,9 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 
 	def visitAuto_field(self, ctx: CoreDSL2Parser.Auto_fieldContext):
 		"""Generate undefined part of encoding."""
-		import traceback
-		traceback.print_stack()
-		input("1")
+		# import traceback
+		# traceback.print_stack()
+		# input("1")
 
 		return None
 
@@ -177,11 +177,11 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 
 	def visitInstruction(self, ctx: CoreDSL2Parser.InstructionContext):
 		"""Generate non-behavioral parts of an instruction."""
-		print("visitInstruction")
+		# print("visitInstruction")
 
 		# read encoding, attributes and disassembly
 		encoding = [self.visit(obj) for obj in ctx.encoding]
-		print("encoding", encoding)
+		# print("encoding", encoding)
 		operands = [self.visit(obj) for obj in ctx.operands]
 		attributes = dict([self.visit(obj) for obj in ctx.attributes])
 		assembly = ctx.assembly.text.replace("\"", "") if ctx.assembly is not None else None
@@ -203,7 +203,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 			# keep track of instruction
 			self._instructions[instr_id] = i
 		else:
-			print("!", self._unencoded_instructions)
+			# print("!", self._unencoded_instructions)
 			assert name not in self._unencoded_instructions
 			self._unencoded_instructions[name] = i
 

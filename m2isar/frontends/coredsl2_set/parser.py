@@ -48,7 +48,7 @@ def parse_cdsl2_set(top_level: pathlib.Path, extra_includes: List[Union[str, pat
     lo = LoadOrder()
     try:
         sets = lo.visit(tree)
-        print("sets", sets)
+        # print("sets", sets)
     except M2Error as e:
         logger.critical("Error during load order building: %s", e)
         sys.exit(1)
@@ -66,7 +66,7 @@ def parse_cdsl2_set(top_level: pathlib.Path, extra_includes: List[Union[str, pat
             s = arch_builder.visit(set_def)
             if not isinstance(s, list):
                 s = [s]
-            print("s", s)
+            # print("s", s)
         except M2Error as e:
             logger.critical("Error building architecture model of core", e)
 
@@ -311,7 +311,7 @@ def parse_cdsl2_set(top_level: pathlib.Path, extra_includes: List[Union[str, pat
             instr_def.operation = op
 
         # Process unencoded instructions
-        print("AAA")
+        # print("AAA")
         for instr_def in set_def.unencoded_instructions.values():
             logger.debug("generating instruction %s", instr_def.name)
             logger.debug("generating attributes")
@@ -374,7 +374,7 @@ def parse_cdsl2_set(top_level: pathlib.Path, extra_includes: List[Union[str, pat
             # op.statements.insert(0, pc_inc)
             op.statements = always_block_statements + op.statements
             instr_def.operation = op
-        print("BBB")
+        # print("BBB")
     return models
 
 

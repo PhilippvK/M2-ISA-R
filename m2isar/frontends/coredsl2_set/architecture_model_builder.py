@@ -78,7 +78,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 
     def visitInstruction_set(self, ctx: CoreDSL2Parser.Instruction_setContext):
         """Generate a top-level instruction set object."""
-        print("visitInstruction_set", ctx.name.text)
+        # print("visitInstruction_set", ctx.name.text)
         # print("len(self._constants) 1", len(self._constants))
         # input("22")
 
@@ -193,7 +193,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 
     def visitInstruction(self, ctx: CoreDSL2Parser.InstructionContext):
         """Generate non-behavioral parts of an instruction."""
-        print("visitInstruction")
+        # print("visitInstruction")
 
         # read encoding, attributes and disassembly
         operands = ctx.operands
@@ -219,7 +219,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
             # keep track of instruction
             self._instructions[instr_id] = i
         else:
-            print("!", self._unencoded_instructions)
+            # print("!", self._unencoded_instructions)
             assert name not in self._unencoded_instructions
             self._unencoded_instructions[name] = i
 
