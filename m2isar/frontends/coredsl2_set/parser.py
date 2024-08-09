@@ -381,7 +381,7 @@ def parse_cdsl2_set(top_level: pathlib.Path, extra_includes: List[Union[str, pat
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("top_level", help="The top-level CoreDSL file.")
-    parser.add_argument("-I", dest="includes", action="append", type=str, help="Extra include dirs.")
+    parser.add_argument("-I", dest="includes", action="append", type=str, default=[], help="Extra include dirs.")
     parser.add_argument("--log", default="info", choices=["critical", "error", "warning", "info", "debug"])
 
     args = parser.parse_args()
