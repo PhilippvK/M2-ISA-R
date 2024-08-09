@@ -387,8 +387,10 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
                     if decl.init is not None:
                         assert not is_operand
                         init = self.visit(decl.init)
+                    if decl.attributes:
+                        attributes = dict([self.visit(obj) for obj in decl.attributes])
 
-                    c = arch.Constant(name, init, [], type_._width, type_.signed)
+                    c = arch.Constant(name, init, attributes, type_._width, type_.signed)
 
                     # TODO: Create bitfielddescr instead of Constant and store in fields?
                     if not is_operand:
@@ -551,6 +553,7 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
             arch.InstrAttribute._member_map_.get(name.upper())
             or arch.MemoryAttribute._member_map_.get(name.upper())
             or arch.FunctionAttribute._member_map_.get(name.upper())
+            or arch.OperandAttribute._member_map_.get(name.upper())
         )
 
         # warn if attribute is unknown to M2-ISA-R

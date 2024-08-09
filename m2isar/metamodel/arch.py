@@ -239,6 +239,16 @@ class InstrAttribute(Enum):
     ETISS_ERROR_INSTRUCTION = auto()
 
 
+class OperandAttribute(Enum):
+    IN = auto()
+    OUT = auto()
+    INOUT = auto()
+    IS_REG = auto()
+    IS_IMM = auto()
+    REG_CLASS = auto()
+    REG_TYPE = auto()
+
+
 class FunctionAttribute(Enum):
     ETISS_STATICFN = auto()
     ETISS_NEEDS_ARCH = auto()
