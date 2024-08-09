@@ -316,12 +316,15 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 
     def visitDeclaration(self, ctx: CoreDSL2Parser.DeclarationContext):
         """Generate a declaration."""
+        # print("visitDeclaration")
         is_operand = isinstance(ctx.parentCtx, CoreDSL2Parser.InstructionContext)
+        # print("is_operand", is_operand)
 
         # extract storage type, qualifiers and attributes
         storage = [self.visit(obj) for obj in ctx.storage]
         # qualifiers = [self.visit(obj) for obj in ctx.qualifiers]
         attributes = dict([self.visit(obj) for obj in ctx.attributes])
+        # print("attributes", attributes)
 
         # extract data type
         type_ = self.visit(ctx.type_)
@@ -333,7 +336,10 @@ class ArchitectureModelBuilder(CoreDSL2Visitor):
 
         # generate each declaration
         for decl in decls:
+            # print("decl", decl)
             name = decl.name.text
+            # print("name", name)
+            # print("decl.attributes", decl.attributes)
 
             # generate a register alias
             if type_.ptr == "&":

@@ -274,14 +274,10 @@ def parse_cdsl2_set(top_level: pathlib.Path, extra_includes: List[Union[str, pat
                 instr_def.attributes[attr_name] = ops
 
             logger.debug("generating operand attributes")
-            print("AAA")
             for operand_name, operand_def in instr_def.operands.items():
-                print("BBB")
                 for attr_name, attr_ops in operand_def.attributes.items():
-                    print("CCC")
                     ops = []
                     for attr_op in attr_ops:
-                        print("DDD")
                         try:
                             behav_builder = BehaviorModelBuilder(
                                 set_def.constants,
@@ -292,7 +288,6 @@ def parse_cdsl2_set(top_level: pathlib.Path, extra_includes: List[Union[str, pat
                                 warned_fns,
                             )
                             op = behav_builder.visit(attr_op)
-                            print("op", op)
                             ops.append(op)
                         except M2Error as e:
                             logger.critical(
@@ -300,13 +295,7 @@ def parse_cdsl2_set(top_level: pathlib.Path, extra_includes: List[Union[str, pat
                             )
                             sys.exit(1)
 
-                    print("WWW")
                     operand_def.attributes[attr_name] = ops
-                    print("XXX")
-                    input("!!!?1")
-                print("YYY")
-                input("!!!?2")
-            print("ZZZ")
 
             behav_builder = BehaviorModelBuilder(
                 set_def.constants,
@@ -374,14 +363,10 @@ def parse_cdsl2_set(top_level: pathlib.Path, extra_includes: List[Union[str, pat
                 instr_def.attributes[attr_name] = ops
 
             logger.debug("generating operand attributes")
-            print("AAA2")
             for operand_name, operand_def in instr_def.operands.items():
-                print("BBB2")
                 for attr_name, attr_ops in operand_def.attributes.items():
-                    print("CCC2")
                     ops = []
                     for attr_op in attr_ops:
-                        print("DDD2")
                         try:
                             behav_builder = BehaviorModelBuilder(
                                 set_def.constants,
@@ -392,7 +377,6 @@ def parse_cdsl2_set(top_level: pathlib.Path, extra_includes: List[Union[str, pat
                                 warned_fns,
                             )
                             op = behav_builder.visit(attr_op)
-                            print("op2", op)
                             ops.append(op)
                         except M2Error as e:
                             logger.critical(
@@ -400,13 +384,7 @@ def parse_cdsl2_set(top_level: pathlib.Path, extra_includes: List[Union[str, pat
                             )
                             sys.exit(1)
 
-                    print("WWW2")
                     operand_def.attributes[attr_name] = ops
-                    print("XXX2")
-                    # input("!!!?12")
-                print("YYY2")
-                # input("!!!?22")
-            print("ZZZ2")
 
             behav_builder = BehaviorModelBuilder(
                 set_def.constants,
