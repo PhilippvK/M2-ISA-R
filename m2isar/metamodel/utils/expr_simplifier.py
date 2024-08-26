@@ -226,5 +226,7 @@ def group(self: behav.Group, context):
 
 	if isinstance(self.expr, behav.IntLiteral):
 		return self.expr
+	elif isinstance(self.expr, behav.NamedReference):
+		return self.expr
 
 	return self
