@@ -218,7 +218,8 @@ def main():
 
                 # generate attributes
                 for attr, ops in instr_def.attributes.items():
-                    attr_id = tree.insert(attrs_id, tk.END, text=attr.name)
+                    attr_name = attr if isinstance(attr, str) else attr.name
+                    attr_id = tree.insert(attrs_id, tk.END, text=attr_name)
                     for op in ops:
                         context = TreeGenContext(tree, attr_id)
                         op.generate(context)
@@ -255,7 +256,8 @@ def main():
 
             # generate attributes
             for attr, ops in instr_def.attributes.items():
-                attr_id = tree.insert(attrs_id, tk.END, text=attr.name)
+                attr_name = attr if isinstance(attr, str) else attr.name
+                attr_id = tree.insert(attrs_id, tk.END, text=attr_name)
                 for op in ops:
                     context = TreeGenContext(tree, attr_id)
                     op.generate(context)
