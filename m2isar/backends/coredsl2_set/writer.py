@@ -152,7 +152,11 @@ class CoreDSL2Writer:
         if function.extern:
             self.write_line(";")
         else:
+            if len(function.operation.statements) == 1:
+                self.enter_block()
             function.operation.generate(self)
+            if len(function.operation.statements) == 1:
+                self.leave_block()
         # self.leave_block()
 
     def write_functions(self, functions):
