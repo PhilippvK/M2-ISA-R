@@ -63,6 +63,11 @@ def int_literal(self: behav.IntLiteral, writer):
     writer.write(self.value)
 
 
+def string_literal(self: behav.StringLiteral, writer):
+    # print("string_literal")
+    writer.write(f"\"{self.value}\"")
+
+
 def scalar_definition(self: behav.ScalarDefinition, writer):
     # print("scalar_definition", self.scalar, dir(self.scalar))
     # input("u")
