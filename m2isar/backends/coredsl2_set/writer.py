@@ -103,10 +103,19 @@ class CoreDSL2Writer:
         if self.needsspace:
             self.write(" ")
         self.write("[[")
-        self.write(attr.name.lower())
+        if isinstance(attr, str):
+            self.write(attr.lower())
+        else:
+            self.write(attr.name.lower())
         if val:
             self.write("=")
-            self.write(val)  # TODO: operation
+            if isinstance(val, list):
+                assert len(val) == 1
+                val = val[0]
+            if isinstance(val, behav.BaseNode):
+                val.generate(self)
+            else:
+                self.write(val)  # TODO: operation
         self.write("]]")
         # print("key", key)
         # print("value", value)
