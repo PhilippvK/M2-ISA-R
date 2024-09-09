@@ -76,8 +76,8 @@ def main():
             found = {}
             for set_name, set_def in model_obj.sets.items():
                 print("set_name", set_name)
-                if set_name == top_set_name:
-                    continue
+                # if set_name == top_set_name:
+                #     continue
                 for instr_enc, instr_def in set_def.instructions.items():
                     instr_name = instr_def.name
                     print("instr_name", instr_name)
