@@ -51,7 +51,12 @@ def main():
                 attr_val = attr_val[0]
                 assert isinstance(attr_val, behav.StringLiteral)
                 attr_val = attr_val.value
-                ret.append(attr_val)
+                if "::" in attr_val:
+                    instr_name, outp_name = attr_val.split("::", 1)
+                else:
+                    instr_name = attr_val
+                    outp_name = "rd"  # TODO: use!
+                ret.append(instr_name)
         return ret
 
     # for core_name, core_def in model_obj.cores.items():
