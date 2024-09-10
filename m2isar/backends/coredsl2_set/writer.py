@@ -37,10 +37,11 @@ class DropUnusedContext:
 
 
 class CoreDSL2Writer:
-    def __init__(self):
+    def __init__(self, write_operands: bool = True):
         self.text = ""
         self.indent_str = "    "
         self.level = 0
+        self._write_operands = write_operands
 
     @property
     def indent(self):
@@ -83,9 +84,6 @@ class CoreDSL2Writer:
             self.write("}", nl=nl)
 
     def write_type(self, data_type, size):
-        # print("write_type")
-        # print("data_type", data_type)
-        # print("size", size)
         if data_type == arch.DataType.U:
             self.write("unsigned")
         elif data_type == arch.DataType.S:
@@ -117,8 +115,6 @@ class CoreDSL2Writer:
             else:
                 self.write(val)  # TODO: operation
         self.write("]]")
-        # print("key", key)
-        # print("value", value)
 
     def write_attributes(self, attributes):
         for attr, val in attributes.items():
@@ -178,14 +174,27 @@ class CoreDSL2Writer:
     def write_encoding_field(self, bitfield):
         name = bitfield.name
         rng = bitfield.range
-        # print("rng", rng)
-        # input("aaaa")
         self.write(name)
         self.write(f"[{rng.upper}:{rng.lower}]")
 
+    def write_operand(self, operand):
+        assert operand.value is None
+        dtype = arch.DataType.S if operand.signed else arch.DataType.U
+        self.write_type(dtype, operand.size)
+        self.write(" ")
+        self.write(operand.name)
+        self.write_attributes(operand.attributes)
+        self.write_line(";")
+
+    def write_operands(self, operands):
+        self.write("operands: ")
+        self.enter_block()
+        for _, op_def in operands.items():
+            self.write_operand(op_def)
+        self.leave_block()
+
     def write_encoding(self, encoding):
         self.write("encoding: ")
-        # print("encoding", encoding, dir(encoding))
         for i, elem in enumerate(encoding):
             if isinstance(elem, arch.BitVal):
                 self.write_encoding_val(elem)
@@ -222,6 +231,8 @@ class CoreDSL2Writer:
         self.write(instruction.name)
         self.write_attributes(instruction.attributes)
         self.enter_block()
+        if self._write_operands and len(instruction.operands) > 0:
+            self.write_operands(instruction.operands)
         self.write_encoding(instruction.encoding)
         self.write_assembly(instruction)
         self.write_behavior(instruction)
@@ -237,7 +248,6 @@ class CoreDSL2Writer:
 
     def write_architectural_state(self, set_def):
         self.write("architectural_state")
-        # print("set_def", set_def, dir(set_def))
         self.enter_block()
         # TODO: scalars, memories,...
         self.leave_block()
@@ -309,11 +319,10 @@ def write_includes(writer, used_extensions, includes_prefix: str = "rv_base/", t
 
 
 def gen_cdsl_code(
-    model_obj, with_includes: bool = True, includes_prefix: str = "rv_base/", tum_includes_prefix: str = ""
+    model_obj, with_includes: bool = True, includes_prefix: str = "rv_base/", tum_includes_prefix: str = "", write_operands: bool = True,
 ):
     # preprocess model
-    # print("model", model["sets"]["XCoreVMac"].keys())
-    writer = CoreDSL2Writer()
+    writer = CoreDSL2Writer(write_operands=write_operands)
 
     # write imports
     core_defs = [core for core in model_obj.cores.values()]
@@ -353,6 +362,7 @@ def main():
         choices=["critical", "error", "warning", "info", "debug"],
     )
     parser.add_argument("--output", "-o", type=str, default=None)
+    parser.add_argument("--write-operands", action="store_true")
     args = parser.parse_args()
 
     # initialize logging
@@ -383,7 +393,7 @@ def main():
     if model_obj.model_version != M2_METAMODEL_VERSION:
         logger.warning("Loaded model version mismatch")
 
-    cdsl_code = gen_cdsl_code(model_obj)
+    cdsl_code = gen_cdsl_code(model_obj, write_operands=args.write_operands)
 
     with open(out_path, "w") as f:
         f.write(cdsl_code)
