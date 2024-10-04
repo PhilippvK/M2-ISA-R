@@ -405,6 +405,23 @@ def get_mm_encoding(in_operands: Dict[str, Operand], out_operands) -> List[Union
                     reg_bitfield(out_register_names[0]),
                     arch.BitVal(7, opcode),
                 ]
+            elif imm_count == 1:
+                imm_name, immediate = immediates[0]
+                if immediate.width > 12:
+                    raise ValueError(f"Bitwidth(={immediate.width}) of the immediate is too large!")
+
+                if immediate.width <= 12:
+                    funct3, major = i_opcodes.get()
+                    update_imm_width(immediate, 12)
+                    imm_sign = arch.DataType.S if immediate.sign == "s" else arch.DataType.U
+                    # I-Format: imm12 | rd2 | funct3 | rd | opcode
+                    return [
+                        arch.BitField(imm_name, arch.RangeSpec(11, 0), imm_sign),
+                        reg_bitfield(out_register_names[1]),
+                        arch.BitVal(3, funct3),
+                        reg_bitfield(out_register_names[0]),
+                        arch.BitVal(7, major),
+                    ]
 
     raise NotImplementedError("Unknown instruction format!")
 
