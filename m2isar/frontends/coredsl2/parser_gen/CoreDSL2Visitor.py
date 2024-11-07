@@ -1,6 +1,6 @@
-# Generated from CoreDSL2.g4 by ANTLR 4.13.1
+# Generated from CoreDSL2.g4 by ANTLR 4.12.0
 from antlr4 import *
-if "." in __name__:
+if __name__ is not None and "." in __name__:
     from .CoreDSL2Parser import CoreDSL2Parser
 else:
     from CoreDSL2Parser import CoreDSL2Parser
@@ -71,6 +71,11 @@ class CoreDSL2Visitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by CoreDSL2Parser#bit_field.
     def visitBit_field(self, ctx:CoreDSL2Parser.Bit_fieldContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by CoreDSL2Parser#auto_field.
+    def visitAuto_field(self, ctx:CoreDSL2Parser.Auto_fieldContext):
         return self.visitChildren(ctx)
 
 
@@ -401,6 +406,11 @@ class CoreDSL2Visitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by CoreDSL2Parser#character_constant.
     def visitCharacter_constant(self, ctx:CoreDSL2Parser.Character_constantContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by CoreDSL2Parser#string_constant.
+    def visitString_constant(self, ctx:CoreDSL2Parser.String_constantContext):
         return self.visitChildren(ctx)
 
 
