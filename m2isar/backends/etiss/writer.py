@@ -121,7 +121,7 @@ def setup():
 
 	start_time = time.strftime("%a, %d %b %Y %H:%M:%S %z", time.localtime())
 
-	return (model_obj.models, logger, output_base_path, spec_name, start_time, args)
+	return (model_obj.cores, logger, output_base_path, spec_name, start_time, args)
 
 def main():
 	"""etiss_writer main entrypoint function."""
