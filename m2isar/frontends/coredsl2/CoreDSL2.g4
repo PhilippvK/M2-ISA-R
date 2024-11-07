@@ -35,6 +35,7 @@ always_block
 
 instruction
 	: name=IDENTIFIER attributes+=attribute* '{'
+	('operands' ':' '{' (operands+=declaration)* '}')?
 	'encoding' ':' encoding+=encoding_entry ('::' encoding+=encoding_entry)*';'
 	('assembly' ':' (assembly=STRING | '{' mnemonic=STRING ',' assembly=STRING '}') ';')?
 	'behavior' ':' behavior=statement
@@ -234,6 +235,7 @@ constant
 	: integer_constant
 	| floating_constant
 	| character_constant
+	| string_constant
 	| bool_constant
 	;
 
@@ -251,6 +253,10 @@ bool_constant
 
 character_constant
 	: value=CHARCONST
+	;
+
+string_constant
+	: value=STRING
 	;
 
 double_left_bracket
