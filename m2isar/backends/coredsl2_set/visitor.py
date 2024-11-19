@@ -31,26 +31,26 @@ def operation(self: behav.Operation, writer):
 
 def binary_operation(self: behav.BinaryOperation, writer):
     # print("binary_operation")
-    self.left = self.left.generate(writer)
+    self.left.generate(writer)
     writer.write(f" {self.op.value} ")
-    self.right = self.right.generate(writer)
+    self.right.generate(writer)
 
 
 def slice_operation(self: behav.SliceOperation, writer):
     # print("slice_operation")
-    self.expr = self.expr.generate(writer)
+    self.expr.generate(writer)
     writer.write("[")
-    self.left = self.left.generate(writer)
+    self.left.generate(writer)
     writer.write(":")
-    self.right = self.right.generate(writer)
+    self.right.generate(writer)
     writer.write("]")
 
 
 def concat_operation(self: behav.ConcatOperation, writer):
     # print("concat_operation")
-    self.left = self.left.generate(writer)
+    self.left.generate(writer)
     writer.write(" :: ")
-    self.right = self.right.generate(writer)
+    self.right.generate(writer)
 
 
 def number_literal(self: behav.IntLiteral, writer):
@@ -140,7 +140,7 @@ def return_(self: behav.Return, writer):
     writer.write("return")
     if self.expr is not None:
         writer.write(" ")
-        self.expr = self.expr.generate(writer)
+        self.expr.generate(writer)
     # writer.write_line(";")
 
 
