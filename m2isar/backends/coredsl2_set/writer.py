@@ -37,10 +37,12 @@ class DropUnusedContext:
 
 
 class CoreDSL2Writer:
-    def __init__(self):
+    def __init__(self, legacy: bool = False):
         self.text = ""
         self.indent_str = "    "
         self.level = 0
+        self.legacy = legacy
+        self.arch = True
 
     @property
     def indent(self):
@@ -188,14 +190,14 @@ class CoreDSL2Writer:
         self.write("assembly: ")
         mnemonic = instruction.mnemonic
         assembly = instruction.assembly
-        if mnemonic:
+        if mnemonic and not self.legacy:
             self.write("{")
             self.write(f'"{mnemonic}"')
             self.write(", ")
         if assembly is None:
             assembly = ""
         self.write(f'"{assembly}"')
-        if mnemonic:
+        if mnemonic and not self.legacy:
             self.write("}")
         self.write(";", nl=True)
 
@@ -223,14 +225,27 @@ class CoreDSL2Writer:
         self.leave_block()
 
     def write_architectural_state(self, set_def):
+        if len(set_def.memories) == 0 and len(set_def.constants) == 0:
+            return
         self.write("architectural_state")
-        # print("set_def", set_def, dir(set_def))
         self.enter_block()
         # TODO: scalars, memories,...
+        for mem_name, mem_def in set_def.memories.items():
+            # TODO: move to write_memorie(s)
+            self.write("register ")
+            self.write_type(arch.DataType.U, mem_def.size)
+            self.write(f" {mem_name}")
+            if mem_def.range.length is not None:
+                self.write("[")
+                self.write(mem_def.range.length)
+                self.write("]")
+            self.write_attributes(mem_def.attributes)
+            self.write_line(";")
+        if len(set_def.constants) > 0:
+            raise NotImplementedError("constants")
         self.leave_block()
 
     def write_set(self, set_def: arch.InstructionSet):
-        # self.write_architectural_state()
         self.write("InstructionSet ")
         self.write(set_def.name)
         # TODO: attributes
@@ -241,6 +256,8 @@ class CoreDSL2Writer:
         self.enter_block()
         if set_def.functions:
             self.write_functions(set_def.functions)
+        if self.arch:
+            self.write_architectural_state(set_def)
         self.write_instructions(set_def.instructions)
         self.leave_block()
         self.write("\n")
@@ -296,11 +313,15 @@ def write_includes(writer, used_extensions, includes_prefix: str = "rv_base/", t
 
 
 def gen_cdsl_code(
-    model_obj, with_includes: bool = True, includes_prefix: str = "rv_base/", tum_includes_prefix: str = ""
+    model_obj,
+    with_includes: bool = True,
+    includes_prefix: str = "rv_base/",
+    tum_includes_prefix: str = "",
+    legacy: bool = False,
 ):
     # preprocess model
     # print("model", model["sets"]["XCoreVMac"].keys())
-    writer = CoreDSL2Writer()
+    writer = CoreDSL2Writer(legacy=legacy)
 
     # write imports
     core_defs = [core for core in model_obj.cores.values()]
@@ -340,6 +361,7 @@ def main():
         choices=["critical", "error", "warning", "info", "debug"],
     )
     parser.add_argument("--output", "-o", type=str, default=None)
+    parser.add_argument("--legacy", action="store_true")
     args = parser.parse_args()
 
     # initialize logging
@@ -370,7 +392,7 @@ def main():
     if model_obj.model_version != M2_METAMODEL_VERSION:
         logger.warning("Loaded model version mismatch")
 
-    cdsl_code = gen_cdsl_code(model_obj)
+    cdsl_code = gen_cdsl_code(model_obj, legacy=args.legacy)
 
     with open(out_path, "w") as f:
         f.write(cdsl_code)
