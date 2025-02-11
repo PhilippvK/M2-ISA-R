@@ -7,14 +7,20 @@
 # Technical University of Munich
 
 import copy
+import dataclasses
 import logging
+from typing import TYPE_CHECKING
 
 from ... import M2NameError, M2SyntaxError, M2TypeError, flatten
 from ...metamodel import arch, behav, intrinsics
-from ...metamodel.code_info import LineInfoFactory, LineInfoPlacement
+from ...metamodel.code_info import (BranchEntryInfoFactory, BranchInfo,
+                                    LineInfoFactory, LineInfoPlacement)
 from ...metamodel.utils import StaticType
 from .parser_gen import CoreDSL2Parser, CoreDSL2Visitor
 from .utils import BOOLCONST, RADIX, SHORTHANDS, SIGNEDNESS
+
+if TYPE_CHECKING:
+	from ...metamodel.code_info import LineInfo
 
 logger = logging.getLogger("behav_builder")
 
@@ -135,13 +141,13 @@ class BehaviorModelBuilder(CoreDSL2Visitor):
 		return ret_decls
 
 	def visitBreak_statement(self, ctx: CoreDSL2Parser.Break_statementContext):
-		return behav.Break(LineInfoFactory.make(ctx.start.source[1].fileName, ctx.start.start, ctx.stop.stop, ctx.start.line, ctx.stop.line, LineInfoPlacement.BEFORE))
+		return behav.Break(LineInfoFactory.make(ctx.start.source[1].fileName, ctx.start.start, ctx.stop.stop, ctx.start.line, ctx.stop.line, placement=LineInfoPlacement.BEFORE))
 
 	def visitReturn_statement(self, ctx: CoreDSL2Parser.Return_statementContext):
 		"""Generate a return statement."""
 
 		expr = self.visit(ctx.expr) if ctx.expr else None
-		return behav.Return(expr, LineInfoFactory.make(ctx.start.source[1].fileName, ctx.start.start, ctx.stop.stop, ctx.start.line, ctx.stop.line, LineInfoPlacement.BEFORE))
+		return behav.Return(expr, LineInfoFactory.make(ctx.start.source[1].fileName, ctx.start.start, ctx.stop.stop, ctx.start.line, ctx.stop.line, placement=LineInfoPlacement.BEFORE))
 
 	def visitWhile_statement(self, ctx: CoreDSL2Parser.While_statementContext):
 		"""Generate a while loop."""
@@ -203,17 +209,22 @@ class BehaviorModelBuilder(CoreDSL2Visitor):
 		into one object.
 		"""
 
+		entry_info = BranchEntryInfoFactory.make(ctx.start.source[1].fileName, ctx.start.start, ctx.stop.stop, ctx.start.line, ctx.stop.line)
+
 		conds = [self.visit(x) for x in ctx.cond]
 		stmts = [self.visit(x) for x in ctx.stmt]
 
-		conds[0].line_info.placement = LineInfoPlacement.BEFORE
-
 		stmts = [x if not isinstance(x, list) else None for x in stmts]
+
+		for cond in conds:
+			old_line_info: LineInfo = cond.line_info
+			new_line_info = BranchInfo(**dataclasses.asdict(old_line_info), branch_id=entry_info.branch_id)
+			cond.line_info = new_line_info
 
 		if None in stmts:
 			raise Exception("meep")
 
-		return behav.Conditional(conds, stmts, LineInfoFactory.make(ctx.start.source[1].fileName, ctx.start.start, ctx.stop.stop, ctx.start.line, ctx.stop.line))
+		return behav.Conditional(conds, stmts, entry_info)
 
 	def visitConditional_expression(self, ctx: CoreDSL2Parser.Conditional_expressionContext):
 		"""Generate a ternary expression."""
