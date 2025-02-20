@@ -121,16 +121,16 @@ def setup():
 
 	start_time = time.strftime("%a, %d %b %Y %H:%M:%S %z", time.localtime())
 
-	return (model_obj.models, logger, output_base_path, spec_name, start_time, args)
+	return (model_obj.cores, logger, output_base_path, spec_name, start_time, args)
 
 def main():
 	"""etiss_writer main entrypoint function."""
 
 	# setup etiss writer
-	models, logger, output_base_path, spec_name, start_time, args = setup()
+	cores, logger, output_base_path, spec_name, start_time, args = setup()
 
 	# preprocess all models
-	for core_name, core in models.items():
+	for core_name, core in cores.items():
 		logger.info("preprocessing model %s", core_name)
 		process_functions(core)
 		process_instructions(core)
@@ -149,7 +149,7 @@ def main():
 		core.functions = renamed_fns
 
 	# generate each core in the model
-	for core_name, core in models.items():
+	for core_name, core in cores.items():
 		logger.info("processing model %s", core_name)
 
 		# create output files path
