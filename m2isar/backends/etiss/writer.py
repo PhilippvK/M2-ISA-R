@@ -121,6 +121,8 @@ def setup():
 
 	start_time = time.strftime("%a, %d %b %Y %H:%M:%S %z", time.localtime())
 
+	assert len(model_obj.cores) > 0, "No cores found in metamodel"
+
 	return (model_obj.cores, logger, output_base_path, spec_name, start_time, args)
 
 def main():
